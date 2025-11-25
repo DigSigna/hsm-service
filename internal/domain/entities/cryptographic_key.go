@@ -1,0 +1,79 @@
+package entities
+
+import (
+	"errors"
+	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
+	"platform-templates/templates/template-go-gin/internal/domain/valueobjects"
+	"time"
+)
+
+type KeyUsage string
+
+const (
+	Signing    KeyUsage = "SIGNING"
+	Encryption KeyUsage = "ENCRYPTION"
+)
+
+type CryptographicKey struct {
+	ID        string                    `json:"id"`
+	Name      string                    `json:"name"`
+	Algorithm valueobjects.KeyAlgorithm `json:"algorithm"`
+	KeySize   int                       `json:"key_size"`
+	Usage     KeyUsage                  `json:"usage"`
+	PublicKey []byte                    `json:"public_key"`
+	KeyHandle string                    `json:"key_handle"` // Referencia en el HSM
+	TenantID  string                    `json:"tenant_id"`
+	Version   int                       `json:"version"`
+	CreatedAt time.Time                 `json:"created_at"`
+	IsActive  bool                      `json:"is_active"`
+	Metadata  map[string]string         `json:"metadata,omitempty"`
+}
+
+func (k *CryptographicKey) Validate() error {
+	if k.Name == "" {
+		return errors.New(string(exceptions.ErrInvalidKeyName))
+	}
+	if !k.Algorithm.IsValid() {
+		return errors.New(string(exceptions.ErrInvalidAlgorithm))
+	}
+	if !k.isValidKeySize() {
+		return errors.New(string(exceptions.ErrInvalidKeySize))
+	}
+	if k.TenantID == "" {
+		return errors.New(string(exceptions.ErrInvalidTenant))
+	}
+	return nil
+}
+
+func (k *CryptographicKey) isValidKeySize() bool {
+	sizes := map[valueobjects.KeyAlgorithm][]int{
+		valueobjects.RSA:     {2048, 3072, 4096},
+		valueobjects.ECDSA:   {256, 384, 521},
+		valueobjects.Ed25519: {256},
+	}
+
+	validSizes, exists := sizes[k.Algorithm]
+	if !exists {
+		return false
+	}
+
+	for _, size := range validSizes {
+		if k.KeySize == size {
+			return true
+		}
+	}
+	return false
+}
+
+func (k *CryptographicKey) Deactivate() {
+	k.IsActive = false
+}
+
+func (u KeyUsage) IsValid() bool {
+	switch u {
+	case Signing, Encryption:
+		return true
+	default:
+		return false
+	}
+}

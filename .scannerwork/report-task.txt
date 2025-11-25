@@ -1,0 +1,6 @@
+projectKey=Template-Go-Gin
+serverUrl=http://localhost:9000
+serverVersion=25.10.0.114319
+dashboardUrl=http://localhost:9000/dashboard?id=Template-Go-Gin
+ceTaskId=a5d6f78b-40ab-497a-919d-81817667018a
+ceTaskUrl=http://localhost:9000/api/ce/task?id=a5d6f78b-40ab-497a-919d-81817667018a

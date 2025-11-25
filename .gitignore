@@ -1,0 +1,9 @@
+#vendor
+/vendor
+
+#env
+.env
+
+#.vscode
+vscode/
+

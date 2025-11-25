@@ -1,0 +1,72 @@
+package routes
+
+import (
+	"platform-templates/templates/template-go-gin/internal/interfaces/http/handlers"
+	"platform-templates/templates/template-go-gin/internal/interfaces/http/middlewares"
+	"platform-templates/templates/template-go-gin/pkg/logger"
+
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+type RouterDependencies struct {
+	Logger         logger.Logger
+	KeyHandler     *handlers.KeyHandler
+	AuditHandler   *handlers.AuditHandler
+	AuthMiddleware *middlewares.AuthMiddleware
+}
+
+func SetupRouter(deps *RouterDependencies) *gin.Engine {
+	router := gin.New()
+
+	// Global middlewares
+	router.Use(middlewares.RecoveryMiddleware(deps.Logger))
+	router.Use(middlewares.LoggingMiddleware(deps.Logger))
+	router.Use(gin.Recovery())
+
+	// Basic health endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":    "healthy",
+			"service":   "template-go-gin",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	router.GET("/ready", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ready"})
+	})
+
+	// API v1 routes
+	api := router.Group("/api/v1")
+	{
+		// Public routes
+		public := api.Group("/public")
+		{
+			public.GET("/keys/:key_id/public-key", deps.KeyHandler.GetPublicKey)
+		}
+
+		// Protected routes
+		protected := api.Group("/")
+		protected.Use(deps.AuthMiddleware.ValidateToken())
+		{
+			// Key management
+			keys := protected.Group("/keys")
+			{
+				keys.POST("", deps.KeyHandler.CreateKey)
+				keys.GET("/:tenant_id", deps.KeyHandler.ListKeys)
+				keys.POST("/sign", deps.KeyHandler.SignHash)
+			}
+
+			// Audit routes - Agregar estas rutas
+			audit := protected.Group("/audit")
+			{
+				audit.POST("/log", deps.AuditHandler.LogAudit)
+				audit.GET("/events", deps.AuditHandler.GetAuditEvents)
+			}
+		}
+	}
+
+	return router
+}
