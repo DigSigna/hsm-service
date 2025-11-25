@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hsm-service/internal/domain/entities"
+	"hsm-service/internal/domain/ports/output"
 	"net/http"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
 	"time"
 )
 

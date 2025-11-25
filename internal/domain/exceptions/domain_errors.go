@@ -21,6 +21,7 @@ const (
 	ErrInvalidResourceType ErrorCode = "INVALID_RESOURCE_TYPE"
 	ErrNotImplemented      ErrorCode = "NOT_IMPLEMENTED"
 	ErrInvalidKeyAlgorithm ErrorCode = "INVALID_KEY_ALGORITHM"
+	ErrTenantNotFound      ErrorCode = "TENANT_NOT_FOUND"
 )
 
 type DomainError struct {
@@ -64,4 +65,5 @@ var (
 	DomainErrInvalidResourceType = NewDomainError(ErrInvalidResourceType, "The audit event resource type is invalid")
 	DomainErrNotImplemented      = NewDomainError(ErrNotImplemented, "This feature is not yet implemented")
 	DomainErrInvalidKeyAlgorithm = NewDomainError(ErrInvalidKeyAlgorithm, "The specified key algorithm is not supported")
+	DomainErrTenantNotFound      = NewDomainError(ErrTenantNotFound, "The specified tenant not found")
 )

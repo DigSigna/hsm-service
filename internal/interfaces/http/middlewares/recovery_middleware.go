@@ -1,8 +1,8 @@
 package middlewares
 
 import (
+	"hsm-service/pkg/logger"
 	"net/http"
-	"platform-templates/templates/template-go-gin/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

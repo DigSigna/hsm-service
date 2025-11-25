@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
-	"platform-templates/templates/template-go-gin/internal/domain/valueobjects"
+	"hsm-service/internal/domain/entities"
+	"hsm-service/internal/domain/exceptions"
+	"hsm-service/internal/domain/ports/output"
+	"hsm-service/internal/domain/valueobjects"
 	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -109,7 +109,7 @@ func (r *postgresKeyRepository) FindByID(ctx context.Context, id string) (*entit
 
 	// Convertir string a KeyAlgorithm
 	key.Algorithm = valueobjects.KeyAlgorithm(algorithmStr)
-	key.Usage = entities.KeyUsage(usageStr)
+	key.Usage = valueobjects.KeyUsage(usageStr)
 	key.CreatedAt = createdAt
 
 	// Convertir metadata de JSONB
@@ -156,7 +156,7 @@ func (r *postgresKeyRepository) FindByIDAndTenant(ctx context.Context, id, tenan
 	}
 
 	key.Algorithm = valueobjects.KeyAlgorithm(algorithmStr)
-	key.Usage = entities.KeyUsage(usageStr)
+	key.Usage = valueobjects.KeyUsage(usageStr)
 	key.CreatedAt = createdAt
 
 	if len(metadataJSON) > 0 {
@@ -207,7 +207,7 @@ func (r *postgresKeyRepository) FindByTenant(ctx context.Context, tenantID strin
 		}
 
 		key.Algorithm = valueobjects.KeyAlgorithm(algorithmStr)
-		key.Usage = entities.KeyUsage(usageStr)
+		key.Usage = valueobjects.KeyUsage(usageStr)
 		key.CreatedAt = createdAt
 
 		if len(metadataJSON) > 0 {

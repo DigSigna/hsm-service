@@ -2,17 +2,17 @@ package main
 
 import (
 	"database/sql"
+	"hsm-service/internal/application/services"
+	"hsm-service/internal/domain/ports/output"
+	"hsm-service/internal/infrastructure/audit"
+	"hsm-service/internal/infrastructure/config"
+	"hsm-service/internal/infrastructure/hsm"
+	"hsm-service/internal/infrastructure/persistence/postgres"
+	"hsm-service/internal/interfaces/http/handlers"
+	"hsm-service/internal/interfaces/http/middlewares"
+	"hsm-service/internal/interfaces/http/routes"
+	"hsm-service/pkg/logger"
 	"log"
-	"platform-templates/templates/template-go-gin/internal/application/services"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
-	"platform-templates/templates/template-go-gin/internal/infrastructure/audit"
-	"platform-templates/templates/template-go-gin/internal/infrastructure/config"
-	"platform-templates/templates/template-go-gin/internal/infrastructure/hsm"
-	"platform-templates/templates/template-go-gin/internal/infrastructure/persistence/postgres"
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/handlers"
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/middlewares"
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/routes"
-	"platform-templates/templates/template-go-gin/pkg/logger"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -40,7 +40,7 @@ func main() {
 
 	var db *sql.DB
 	if cfg.Environment != "development" {
-		db, err := sql.Open("postgres", cfg.DatabaseConnectionString())
+		db, err := sql.Open("postgres", cfg.Database.PostgreSQLConnectionString())
 		if err != nil {
 			log.Fatalf("Failed to connect to database: %v", err)
 		}
@@ -61,15 +61,15 @@ func main() {
 	keyRepo := postgres.NewPostgresKeyRepository(db)
 	auditRepo := postgres.NewAuditRepository(db)
 
-	// 🆕 CLIENTE DE AUDITORÍA
+	//  CLIENTE DE AUDITORÍA
 	var auditClient output.AuditClient
-	if cfg.AuditService.Enabled && cfg.AuditService.BaseURL != "" {
+	if cfg.Audit.Enabled && cfg.Audit.BaseURL != "" {
 		// Usar cliente REST para producción
 		auditClient = audit.NewRestAuditClient(
-			cfg.AuditService.BaseURL,
+			cfg.Audit.BaseURL,
 			10*time.Second, // timeout
 		)
-		log.Printf("Audit client configured for: %s", cfg.AuditService.BaseURL)
+		log.Printf("Audit client configured for: %s", cfg.Audit.BaseURL)
 	} else {
 		// Usar mock para desarrollo
 		auditClient = audit.NewMockAuditClient()
@@ -77,8 +77,11 @@ func main() {
 	}
 	defer auditClient.Close()
 
+	// Tenant Repo
+	var tenantReo output.TenantRepository
+
 	// Application Services
-	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient)
+	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient, tenantReo)
 	auditService := services.NewAuditService(auditRepo)
 	signingService := services.NewSigningService(keyRepo, hsmClient)
 	// Handlers

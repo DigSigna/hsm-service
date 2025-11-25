@@ -2,8 +2,8 @@ package security
 
 import (
 	// "context"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
-	"platform-templates/templates/template-go-gin/internal/domain/valueobjects"
+	"hsm-service/internal/domain/ports/output"
+	"hsm-service/internal/domain/valueobjects"
 )
 
 type HSMAdapter struct {

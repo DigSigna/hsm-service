@@ -2,7 +2,7 @@ package input
 
 import (
 	"context"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
+	"hsm-service/internal/domain/entities"
 )
 
 type AuthService interface {

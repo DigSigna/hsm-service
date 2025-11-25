@@ -1,69 +1,127 @@
 package config
 
+import (
+	"log"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
 type Config struct {
 	Environment string
-	Database    struct {
-		Host     string
-		Port     int
-		User     string
-		Password string
-		Name     string
-	}
-	Server struct {
-		Address string
-	}
-	HSM struct {
-		LibraryPath string
-		TokenLabel  string
-		Pin         string
-	}
-	AuditService struct {
-		Enabled bool   `mapstructure:"enabled"`
-		BaseURL string `mapstructure:"base_url"`
-	} `mapstructure:"audit_service"`
+	Database    DatabaseConfig
+	Server      ServerConfig
+	HSM         HSMConfig
+	Redis       RedisConfig
+	Audit       AuditConfig
 }
 
-func (c *Config) DatabaseConnectionString() string {
-	return "host=" + c.Database.Host +
-		" port=" + string(rune(c.Database.Port)) +
-		" user=" + c.Database.User +
-		" password=" + c.Database.Password +
-		" dbname=" + c.Database.Name +
-		" sslmode=disable"
+type DatabaseConfig struct {
+	Host            string
+	Port            string
+	User            string
+	Password        string
+	Name            string
+	SSLMode         string
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 }
 
-func LoadConfig() *Config {
-	// Dummy config for demonstration; replace with actual config loading logic
-	return &Config{
-		Environment: "development",
-		Database: struct {
-			Host     string
-			Port     int
-			User     string
-			Password string
-			Name     string
-		}{
-			Host:     "localhost",
-			Port:     5432,
-			User:     "postgres",
-			Password: "password",
-			Name:     "mydb",
-		},
-		Server: struct{ Address string }{
-			Address: ":8080",
-		},
-		HSM: struct {
-			LibraryPath string
-			TokenLabel  string
-			Pin         string
-		}{
-			LibraryPath: "/usr/local/lib/softhsm/libsofthsm2.so",
-			TokenLabel:  "mytoken",
-			Pin:         "1234",
-		},
-	}
+type ServerConfig struct {
+	Address string
+}
+
+type HSMConfig struct {
+	LibraryPath    string        `mapstructure:"library_path"`
+	TokenLabel     string        `mapstructure:"token_label"`
+	Pin            string        `mapstructure:"pin"`
+	Slot           uint          `mapstructure:"slot"`
+	SessionTimeout time.Duration `mapstructure:"session_timeout"`
+	MaxSessions    int           `mapstructure:"max_sessions"`
+}
+
+type RedisConfig struct {
+	Address     string `mapstructure:"address"`
+	Password    string `mapstructure:"password"`
+	DB          int    `mapstructure:"db"`
+	AuditStream string `mapstructure:"audit_stream"`
+}
+
+type AuditConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	BaseURL string `mapstructure:"base_url"`
+}
+
+// MySQL Connection String para Digital Ocean
+func (c *DatabaseConfig) MySQLConnectionString() string {
+	return c.User + ":" + c.Password + "@tcp(" + c.Host + ":" + c.Port + ")/" + c.Name + "?parseTime=true&tls=true"
+}
+
+// PostgreSQL Connection String (para desarrollo/local)
+func (c *DatabaseConfig) PostgreSQLConnectionString() string {
+	return "host=" + c.Host + " port=" + c.Port + " user=" + c.User + " password=" + c.Password + " dbname=" + c.Name + " sslmode=" + c.SSLMode
 }
 
 func (c *Config) IsAuditEnabled() bool {
-	return c.AuditService.Enabled && c.AuditService.BaseURL != ""
+	return c.Audit.Enabled && c.Audit.BaseURL != ""
+}
+
+func LoadConfig() *Config {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("./config")
+
+	// Valores por defecto para desarrollo
+	setDefaults()
+
+	// Leer variables de entorno
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("HSM")
+
+	// Intentar cargar config.yaml, pero no fallar si no existe
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("Config file not found, using environment variables and defaults: %v", err)
+	}
+
+	var config Config
+	if err := viper.Unmarshal(&config); err != nil {
+		log.Fatalf("Unable to decode config into struct: %v", err)
+	}
+
+	return &config
+}
+
+func setDefaults() {
+	// Database - MySQL para Digital Ocean
+	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.port", "3306")
+	viper.SetDefault("database.user", "hsm_user")
+	viper.SetDefault("database.password", "password")
+	viper.SetDefault("database.name", "hsm_service")
+	viper.SetDefault("database.max_open_conns", 25)
+	viper.SetDefault("database.max_idle_conns", 25)
+	viper.SetDefault("database.conn_max_lifetime", "300s")
+
+	// Server
+	viper.SetDefault("server.address", ":8080")
+
+	// HSM - Configuración para SoftHSM en Minikube
+	viper.SetDefault("hsm.library_path", "/usr/lib/softhsm/libsofthsm2.so")
+	viper.SetDefault("hsm.token_label", "digsigna-token")
+	viper.SetDefault("hsm.pin", "1234")
+	viper.SetDefault("hsm.slot", 0)
+	viper.SetDefault("hsm.session_timeout", "30s")
+	viper.SetDefault("hsm.max_sessions", 10)
+
+	// Redis - Para auditoría temporal
+	viper.SetDefault("redis.address", "localhost:6379")
+	viper.SetDefault("redis.password", "")
+	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.audit_stream", "hsm-audit-events")
+
+	// Audit
+	viper.SetDefault("audit.enabled", true)
+	viper.SetDefault("audit.base_url", "http://audit-service:8080")
 }

@@ -1,9 +1,9 @@
 package middlewares
 
 import (
+	"hsm-service/internal/domain/ports/input"
+	"hsm-service/pkg/logger"
 	"net/http"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/input"
-	"platform-templates/templates/template-go-gin/pkg/logger"
 
 	"go.uber.org/zap"
 

@@ -2,9 +2,9 @@ package tests
 
 import (
 	"encoding/json"
+	"hsm-service/internal/interfaces/http/routes"
 	"net/http"
 	"net/http/httptest"
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/routes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

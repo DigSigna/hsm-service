@@ -2,7 +2,7 @@ package entities
 
 import (
 	"errors"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
+	"hsm-service/internal/domain/exceptions"
 	"time"
 )
 

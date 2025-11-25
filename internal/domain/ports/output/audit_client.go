@@ -2,7 +2,7 @@ package output
 
 import (
 	"context"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
+	"hsm-service/internal/domain/entities"
 )
 
 // AuditClient define el contrato para el cliente de auditoría

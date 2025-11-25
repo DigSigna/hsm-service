@@ -1,0 +1,33 @@
+environment: development
+
+database:
+  host: "localhost"
+  port: "3306"
+  user: "hsm_user"
+  password: "password"
+  name: "hsm_service"
+  ssl_mode: "disable"
+  max_open_conns: 25
+  max_idle_conns: 25
+  conn_max_lifetime: "300s"
+
+server:
+  address: ":8080"
+
+hsm:
+  library_path: "/usr/lib/softhsm/libsofthsm2.so"
+  token_label: "digsigna-token"
+  pin: "1234"
+  slot: 0
+  session_timeout: "30s"
+  max_sessions: 10
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+  audit_stream: "hsm-audit-events"
+
+audit:
+  enabled: true
+  base_url: "http://audit-service:8080"

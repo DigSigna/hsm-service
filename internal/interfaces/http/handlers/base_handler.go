@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"hsm-service/internal/domain/exceptions"
+	"hsm-service/pkg/logger"
 	"net/http"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
-	"platform-templates/templates/template-go-gin/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

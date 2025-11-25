@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/handlers"
-	"platform-templates/templates/template-go-gin/internal/interfaces/http/middlewares"
-	"platform-templates/templates/template-go-gin/pkg/logger"
+	"hsm-service/internal/interfaces/http/handlers"
+	"hsm-service/internal/interfaces/http/middlewares"
+	"hsm-service/pkg/logger"
 
 	"time"
 

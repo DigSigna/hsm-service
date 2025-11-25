@@ -2,8 +2,8 @@ package entities
 
 import (
 	"errors"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
-	"platform-templates/templates/template-go-gin/internal/domain/valueobjects"
+	"hsm-service/internal/domain/exceptions"
+	"hsm-service/internal/domain/valueobjects"
 	"time"
 )
 
@@ -19,9 +19,9 @@ type CryptographicKey struct {
 	Name      string                    `json:"name"`
 	Algorithm valueobjects.KeyAlgorithm `json:"algorithm"`
 	KeySize   int                       `json:"key_size"`
-	Usage     KeyUsage                  `json:"usage"`
+	Usage     valueobjects.KeyUsage     `json:"usage"`
 	PublicKey []byte                    `json:"public_key"`
-	KeyHandle string                    `json:"key_handle"` // Referencia en el HSM
+	KeyHandle string                    `json:"key_handle"`
 	TenantID  string                    `json:"tenant_id"`
 	Version   int                       `json:"version"`
 	CreatedAt time.Time                 `json:"created_at"`
@@ -41,6 +41,9 @@ func (k *CryptographicKey) Validate() error {
 	}
 	if k.TenantID == "" {
 		return errors.New(string(exceptions.ErrInvalidTenant))
+	}
+	if !k.Usage.IsValid() {
+		return errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 	return nil
 }
@@ -67,13 +70,4 @@ func (k *CryptographicKey) isValidKeySize() bool {
 
 func (k *CryptographicKey) Deactivate() {
 	k.IsActive = false
-}
-
-func (u KeyUsage) IsValid() bool {
-	switch u {
-	case Signing, Encryption:
-		return true
-	default:
-		return false
-	}
 }

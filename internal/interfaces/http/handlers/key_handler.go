@@ -1,11 +1,10 @@
 package handlers
 
 import (
+	"hsm-service/internal/domain/ports/input"
+	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/pkg/logger"
 	"net/http"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/input"
-	"platform-templates/templates/template-go-gin/internal/domain/valueobjects"
-	"platform-templates/templates/template-go-gin/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,7 +49,7 @@ func (h *KeyHandler) CreateKey(c *gin.Context) {
 		req.Name,
 		valueobjects.KeyAlgorithm(req.Algorithm),
 		req.KeySize,
-		entities.KeyUsage(req.Usage),
+		valueobjects.KeyUsage(req.Usage),
 		req.TenantID,
 	)
 	if err != nil {

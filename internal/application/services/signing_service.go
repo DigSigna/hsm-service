@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"errors"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/input"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
+	"hsm-service/internal/domain/exceptions"
+	"hsm-service/internal/domain/ports/input"
+	"hsm-service/internal/domain/ports/output"
+	"hsm-service/internal/domain/valueobjects"
 )
 
 type signingService struct {
@@ -37,7 +37,7 @@ func (s *signingService) SignHash(ctx context.Context, keyID string, hash []byte
 		return nil, errors.New(string(exceptions.ErrKeyInactive))
 	}
 
-	if key.Usage != entities.Signing {
+	if key.Usage != valueobjects.KeyUsageSigning && key.Usage != valueobjects.KeyUsageBoth {
 		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 

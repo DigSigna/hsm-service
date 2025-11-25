@@ -2,7 +2,7 @@ package output
 
 import (
 	"context"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
+	"hsm-service/internal/domain/entities"
 )
 
 // KeyRepository - Puerto de salida para persistencia de metadatos de claves

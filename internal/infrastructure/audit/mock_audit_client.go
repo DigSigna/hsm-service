@@ -3,9 +3,9 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"hsm-service/internal/domain/entities"
+	"hsm-service/internal/domain/ports/output"
 	"log"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
 )
 
 type MockAuditClient struct{}

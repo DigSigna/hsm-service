@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"errors"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
-	"platform-templates/templates/template-go-gin/internal/domain/exceptions"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/input"
-	"platform-templates/templates/template-go-gin/internal/domain/ports/output"
+	"hsm-service/internal/domain/entities"
+	"hsm-service/internal/domain/exceptions"
+	"hsm-service/internal/domain/ports/input"
+	"hsm-service/internal/domain/ports/output"
 	"time"
 
 	"github.com/google/uuid"

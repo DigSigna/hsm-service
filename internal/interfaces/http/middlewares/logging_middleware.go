@@ -1,7 +1,7 @@
 package middlewares
 
 import (
-	"platform-templates/templates/template-go-gin/pkg/logger"
+	"hsm-service/pkg/logger"
 	"time"
 
 	"github.com/gin-gonic/gin"

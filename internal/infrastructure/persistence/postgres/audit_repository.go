@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"platform-templates/templates/template-go-gin/internal/domain/entities"
+	"hsm-service/internal/domain/entities"
 )
 
 // AuditRepository handles audit log persistence
