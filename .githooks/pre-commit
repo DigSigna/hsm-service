@@ -1,0 +1,16 @@
+#!/bin/bash
+echo "Running pre-commit checks..."
+
+# Tests rápidos
+echo "Running quick tests..."
+go test -short ./...
+
+# Linter básico
+echo "Running linter..."
+golangci-lint run --fast ./...
+
+# Security scan básico
+echo "Running security check..."
+go run github.com/securecodewarrior/gosec/v2/cmd/gosec@latest -quiet ./...
+
+echo "Pre-commit checks passed!"
