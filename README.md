@@ -32,10 +32,20 @@ go mod tidy
 go test ./...
 
 # Ejecutar en desarrollo
-go run cmd/server/main.go
+go run cmd/api/main.go
 
+
+# Establecer variables para compilación Linux
+$env:GOOS = "linux"
+$env:GOARCH = "amd64"
+$env:CGO_ENABLED = "1"
+
+env GOOS=linux GOARCH=amd64 CGO_ENABLED=1
 # Construir binario
 make build
+
+# Verificar compilación para linux
+file api
 ```
 
 ## Docker

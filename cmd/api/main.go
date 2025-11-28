@@ -40,15 +40,16 @@ func main() {
 
 	var db *sql.DB
 	if cfg.Environment != "development" {
-		db, err := sql.Open("postgres", cfg.Database.PostgreSQLConnectionString())
-		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
-		}
-		defer db.Close()
+		// db, err := sql.Open("postgres", cfg.Database.PostgreSQLConnectionString())
+		// if err != nil {
+		// 	log.Fatalf("Failed to connect to database: %v", err)
+		// }
+		// defer db.Close()
 
-		if err := db.Ping(); err != nil {
-			log.Fatalf("Database ping failed: %v", err)
-		}
+		// if err := db.Ping(); err != nil {
+		// 	log.Fatalf("Database ping failed: %v", err)
+		// }
+		db = nil
 	} else {
 		zapLogger.Info("Running in development mode - database connection skipped")
 		db = nil // o usa un mock
