@@ -2,7 +2,12 @@ package hsm
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/asn1"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"hsm-service/internal/domain/entities"
@@ -10,6 +15,7 @@ import (
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
 	"log"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -151,15 +157,27 @@ func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobje
 
 func (c *SoftHSMClient) generateRSAKeyPair(size int, label string) (pkcs11.ObjectHandle, pkcs11.ObjectHandle, error) {
 	log.Printf("DEBUG [generateRSAKeyPair]: Creating templates for RSA %d bits, label: %s", size, label)
+
+	// Ensure valid key sizes
+	if size != 2048 && size != 3072 && size != 4096 {
+		return 0, 0, fmt.Errorf("unsupported RSA key size: %d", size)
+	}
+
+	// Public exponent: 65537 (0x01 0x00 0x01) as big-endian bytes
+	pubExp := []byte{0x01, 0x00, 0x01}
+
+	// Use uint for modulus bits (CK_ULONG)
+	modulusBits := uint(size)
+
 	publicKeyTemplate := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
-		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, size),
-		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
+		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, modulusBits),
+		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, pubExp),
 		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),          // persist key on token
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, []byte(label)), // prefer []byte
 	}
 
 	privateKeyTemplate := []*pkcs11.Attribute{
@@ -170,7 +188,7 @@ func (c *SoftHSMClient) generateRSAKeyPair(size int, label string) (pkcs11.Objec
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, []byte(label)),
 	}
 
 	log.Printf("DEBUG: Calling GenerateKeyPair...")
@@ -181,37 +199,15 @@ func (c *SoftHSMClient) generateRSAKeyPair(size int, label string) (pkcs11.Objec
 	)
 
 	if err != nil {
-		// Obtener error específico de PKCS#11
-		if pkcs11Err, ok := err.(pkcs11.Error); ok {
-			log.Printf("ERROR: PKCS#11 Error Code: 0x%08X", uint(pkcs11Err))
-
-			// Traducir códigos de error comunes
-			switch pkcs11Err {
-			case pkcs11.CKR_TOKEN_WRITE_PROTECTED:
-				log.Printf("ERROR: Token is write protected")
-			case pkcs11.CKR_PIN_INCORRECT:
-				log.Printf("ERROR: PIN incorrect")
-			case pkcs11.CKR_SESSION_HANDLE_INVALID:
-				log.Printf("ERROR: Session handle invalid")
-			case pkcs11.CKR_MECHANISM_INVALID:
-				log.Printf("ERROR: Mechanism invalid")
-			case pkcs11.CKR_TEMPLATE_INCOMPLETE:
-				log.Printf("ERROR: Template incomplete")
-			case pkcs11.CKR_ATTRIBUTE_TYPE_INVALID:
-				log.Printf("ERROR: Attribute type invalid")
-			case pkcs11.CKR_ATTRIBUTE_VALUE_INVALID:
-				log.Printf("ERROR: Attribute value invalid")
-			default:
-				log.Printf("ERROR: Unknown PKCS#11 error: 0x%08X", uint(pkcs11Err))
-			}
+		if pkErr, ok := err.(pkcs11.Error); ok {
+			log.Printf("ERROR: PKCS#11 Error Code: 0x%08X", uint(pkErr))
 		}
 		log.Printf("ERROR: GenerateKeyPair failed: %v", err)
 		return 0, 0, err
 	}
 
 	log.Printf("DEBUG: GenerateKeyPair successful - pubHandle=%d, privHandle=%d", pubHandle, privHandle)
-
-	return pubHandle, privHandle, err
+	return pubHandle, privHandle, nil
 }
 
 func (c *SoftHSMClient) generateECDSAKeyPair(size int, label string) (pkcs11.ObjectHandle, pkcs11.ObjectHandle, error) {
@@ -228,9 +224,10 @@ func (c *SoftHSMClient) generateECDSAKeyPair(size int, label string) (pkcs11.Obj
 		return 0, 0, errors.New(string(exceptions.ErrInvalidKeySize))
 	}
 
+	// Marshal the selected curve OID for EC_PARAMS and handle errors.
 	ecParams, err := asn1.Marshal(curve)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to marshal EC params: %w", err)
 	}
 
 	publicKeyTemplate := []*pkcs11.Attribute{
@@ -262,30 +259,128 @@ func (c *SoftHSMClient) generateECDSAKeyPair(size int, label string) (pkcs11.Obj
 }
 
 func (c *SoftHSMClient) exportPublicKey(pubHandle pkcs11.ObjectHandle) ([]byte, error) {
-	attrs, err := c.ctx.GetAttributeValue(c.session, pubHandle, []*pkcs11.Attribute{
+	// 1) Leer tipo de clave
+	keyTypeAttrs, err := c.ctx.GetAttributeValue(c.session, pubHandle, []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, nil),
-		pkcs11.NewAttribute(pkcs11.CKA_MODULUS, nil),
-		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, nil),
-		pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	// Para RSA: combinar módulo y exponente
-	// Para ECDSA: usar el punto EC
-	for _, attr := range attrs {
-		if attr.Type == pkcs11.CKA_MODULUS && len(attr.Value) > 0 {
-			// RSA public key
-			return attr.Value, nil
-		}
-		if attr.Type == pkcs11.CKA_EC_POINT && len(attr.Value) > 0 {
-			// ECDSA public key
-			return attr.Value, nil
-		}
+	if len(keyTypeAttrs) == 0 || len(keyTypeAttrs[0].Value) == 0 {
+		return nil, errors.New("cannot determine key type")
 	}
 
-	return nil, fmt.Errorf("failed to export public key")
+	kt := keyTypeAttrs[0].Value[0]
+
+	switch kt {
+	case byte(pkcs11.CKK_RSA):
+		// Pedir sólo modulus y exponent
+		attrs, err := c.ctx.GetAttributeValue(c.session, pubHandle, []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_MODULUS, nil),
+			pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, nil),
+		})
+		if err != nil {
+			return nil, err
+		}
+		var modulusBytes, exponentBytes []byte
+		for _, a := range attrs {
+			switch a.Type {
+			case pkcs11.CKA_MODULUS:
+				modulusBytes = a.Value
+			case pkcs11.CKA_PUBLIC_EXPONENT:
+				exponentBytes = a.Value
+			}
+		}
+		if len(modulusBytes) == 0 || len(exponentBytes) == 0 {
+			return nil, errors.New("rsa attributes missing")
+		}
+
+		n := new(big.Int).SetBytes(modulusBytes)
+		// exponentBytes could be big-endian bytes, convert to int
+		e := 0
+		for _, b := range exponentBytes {
+			e = e<<8 + int(b)
+		}
+		rsaPub := &rsa.PublicKey{N: n, E: e}
+		derBytes, err := x509.MarshalPKIXPublicKey(rsaPub)
+		if err != nil {
+			return nil, err
+		}
+		// devolver DER; si quieres PEM lo convierto abajo
+		return derBytes, nil
+
+	case byte(pkcs11.CKK_EC):
+		// Pedir sólo el punto EC y CKA_EC_PARAMS (OID)
+		attrs, err := c.ctx.GetAttributeValue(c.session, pubHandle, []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
+			pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, nil),
+		})
+		if err != nil {
+			return nil, err
+		}
+		var ecPoint, ecParams []byte
+		for _, a := range attrs {
+			switch a.Type {
+			case pkcs11.CKA_EC_POINT:
+				ecPoint = a.Value
+			case pkcs11.CKA_EC_PARAMS:
+				ecParams = a.Value
+			}
+		}
+		if len(ecPoint) == 0 || len(ecParams) == 0 {
+			return nil, errors.New("ec attributes missing")
+		}
+
+		// ecPoint viene con DER OCTET STRING wrapping; desempaquetar si es necesario
+		var rawPoint []byte
+		if rest, err := asn1.Unmarshal(ecPoint, &rawPoint); err == nil && len(rest) == 0 {
+			// rawPoint contains the unwrapped EC point bytes
+			rawPoint = rawPoint
+		} else {
+			// si no se puede desempaquetar, asumir que ecPoint ya es el punto
+			rawPoint = ecPoint
+		}
+
+		// Obtener OID de parámetro para seleccionar curva
+		var oid asn1.ObjectIdentifier
+		if _, err := asn1.Unmarshal(ecParams, &oid); err != nil {
+			return nil, err
+		}
+
+		var curve elliptic.Curve
+		switch {
+		case oid.Equal(asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}): // P-256
+			curve = elliptic.P256()
+		case oid.Equal(asn1.ObjectIdentifier{1, 3, 132, 0, 34}): // P-384
+			curve = elliptic.P384()
+		case oid.Equal(asn1.ObjectIdentifier{1, 3, 132, 0, 35}): // P-521
+			curve = elliptic.P521()
+		default:
+			return nil, errors.New("unsupported ec curve oid: " + oid.String())
+		}
+
+		// rawPoint starts with 0x04 (uncompressed) + X+Y
+		if len(rawPoint) == 0 || rawPoint[0] != 0x04 {
+			return nil, errors.New("unexpected ec point format")
+		}
+		coordLen := (len(rawPoint) - 1) / 2
+		x := new(big.Int).SetBytes(rawPoint[1 : 1+coordLen])
+		y := new(big.Int).SetBytes(rawPoint[1+coordLen:])
+		pub := &ecdsa.PublicKey{Curve: curve, X: x, Y: y}
+		derBytes, err := x509.MarshalPKIXPublicKey(pub)
+		if err != nil {
+			return nil, err
+		}
+		return derBytes, nil
+
+	default:
+		return nil, errors.New("unsupported key type")
+	}
+}
+
+// helper para devolver PEM si lo quieres
+func derToPEM(der []byte, typ string) []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: typ, Bytes: der})
 }
 
 func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []byte) ([]byte, error) {
