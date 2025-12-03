@@ -17,15 +17,7 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	Host            string
-	Port            string
-	User            string
-	Password        string
-	Name            string
-	SSLMode         string
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	HSM_DATABASE_CONNECTION_STRING string `mapstructure:"connection_string"`
 }
 
 type ServerConfig struct {
@@ -51,16 +43,6 @@ type RedisConfig struct {
 type AuditConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	BaseURL string `mapstructure:"base_url"`
-}
-
-// MySQL Connection String para Digital Ocean
-func (c *DatabaseConfig) MySQLConnectionString() string {
-	return c.User + ":" + c.Password + "@tcp(" + c.Host + ":" + c.Port + ")/" + c.Name + "?parseTime=true&tls=true"
-}
-
-// PostgreSQL Connection String (para desarrollo/local)
-func (c *DatabaseConfig) PostgreSQLConnectionString() string {
-	return "host=" + c.Host + " port=" + c.Port + " user=" + c.User + " password=" + c.Password + " dbname=" + c.Name + " sslmode=" + c.SSLMode
 }
 
 func (c *Config) IsAuditEnabled() bool {
@@ -95,14 +77,7 @@ func LoadConfig() *Config {
 
 func setDefaults() {
 	// Database - MySQL para Digital Ocean
-	viper.SetDefault("database.host", "localhost")
-	viper.SetDefault("database.port", "3306")
-	viper.SetDefault("database.user", "hsm_user")
-	viper.SetDefault("database.password", "password")
-	viper.SetDefault("database.name", "hsm_service")
-	viper.SetDefault("database.max_open_conns", 25)
-	viper.SetDefault("database.max_idle_conns", 25)
-	viper.SetDefault("database.conn_max_lifetime", "300s")
+	viper.SetDefault("database.connection_string", "")
 
 	// Server
 	viper.SetDefault("server.address", ":8080")

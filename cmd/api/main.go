@@ -7,7 +7,9 @@ import (
 	"hsm-service/internal/infrastructure/audit"
 	"hsm-service/internal/infrastructure/config"
 	"hsm-service/internal/infrastructure/hsm"
-	"hsm-service/internal/infrastructure/persistence/postgres"
+
+	// "hsm-service/internal/infrastructure/persistence/postgres"
+	"hsm-service/internal/infrastructure/persistence/mysql"
 	"hsm-service/internal/interfaces/http/handlers"
 	"hsm-service/internal/interfaces/http/middlewares"
 	"hsm-service/internal/interfaces/http/routes"
@@ -15,7 +17,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -27,32 +29,13 @@ func main() {
 	defer zapLogger.Sync()
 
 	// Database
-	// db, err := sql.Open("postgres", cfg.DatabaseConnectionString())
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to database: %v", err)
-	// }
-	// defer db.Close()
+	db, err := sql.Open("mysql", cfg.Database.HSM_DATABASE_CONNECTION_STRING)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
 
-	// // Test database connection
-	// if err := db.Ping(); err != nil {
-	// 	log.Fatalf("Database ping failed: %v", err)
-	// }
-
-	var db *sql.DB
-	if cfg.Environment != "development" {
-		// db, err := sql.Open("postgres", cfg.Database.PostgreSQLConnectionString())
-		// if err != nil {
-		// 	log.Fatalf("Failed to connect to database: %v", err)
-		// }
-		// defer db.Close()
-
-		// if err := db.Ping(); err != nil {
-		// 	log.Fatalf("Database ping failed: %v", err)
-		// }
-		db = nil
-	} else {
-		zapLogger.Info("Running in development mode - database connection skipped")
-		db = nil // o usa un mock
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Database ping failed: %v", err)
 	}
 
 	// HSM Client (mock for now to compile)
@@ -67,8 +50,8 @@ func main() {
 	}
 
 	// Repositories
-	keyRepo := postgres.NewPostgresKeyRepository(db)
-	auditRepo := postgres.NewAuditRepository(db)
+	keyRepo := mysql.NewMySqlKeyRepository(db)
+	auditRepo := mysql.NewAuditRepository(db)
 
 	//  CLIENTE DE AUDITORÍA
 	var auditClient output.AuditClient
