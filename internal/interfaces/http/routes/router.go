@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/interfaces/http/handlers"
 	"hsm-service/internal/interfaces/http/middlewares"
 	"hsm-service/pkg/logger"
@@ -15,6 +16,7 @@ type RouterDependencies struct {
 	KeyHandler     *handlers.KeyHandler
 	AuditHandler   *handlers.AuditHandler
 	AuthMiddleware *middlewares.AuthMiddleware
+	HSMClient      output.HSMClient
 }
 
 func SetupRouter(deps *RouterDependencies) *gin.Engine {
@@ -32,6 +34,26 @@ func SetupRouter(deps *RouterDependencies) *gin.Engine {
 			"service":   "template-go-gin",
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
+	})
+
+	router.GET("/hsm-health", func(c *gin.Context) {
+		if deps.HSMClient == nil {
+			c.JSON(503, gin.H{
+				"status": "HSM client not configured",
+				"error":  "HSMClient dependency not injected",
+			})
+			return
+		}
+
+		if err := deps.HSMClient.HealthCheck(c.Request.Context()); err != nil {
+			c.JSON(503, gin.H{
+				"status": "HSM unhealthy",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		c.JSON(200, gin.H{"status": "HSM healthy"})
 	})
 
 	router.GET("/ready", func(c *gin.Context) {

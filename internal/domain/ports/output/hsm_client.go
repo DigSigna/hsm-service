@@ -23,4 +23,7 @@ type HSMClient interface {
 	// Operaciones Extendidas para Multitenancy
 	GenerateKeyPairWithLabel(ctx context.Context, algorithm valueobjects.KeyAlgorithm, size int, label, tenantID string) (publicKey []byte, keyHandle string, error error)
 	FindKeysByLabel(ctx context.Context, labelPattern string) ([]*entities.HSMKey, error)
+
+	//health check
+	HealthCheck(ctx context.Context) error
 }

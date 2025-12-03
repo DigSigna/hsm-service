@@ -9,7 +9,9 @@ import (
 	"hsm-service/internal/domain/exceptions"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/miekg/pkcs11"
@@ -20,6 +22,7 @@ type SoftHSMClient struct {
 	session    pkcs11.SessionHandle
 	tokenLabel string
 	pin        string
+	mutex      sync.Mutex // Solo para thread-safety básico
 }
 
 // Garantiza implementación del puerto
@@ -29,7 +32,78 @@ func NewMockHSMClient() *SoftHSMClient {
 	return &SoftHSMClient{}
 }
 
+func NewSoftHSMClient(modulePath, pin string, slot uint) (*SoftHSMClient, error) {
+	log.Printf("DEBUG: Initializing SoftHSMClient with module: %s, slot: %d", modulePath, slot)
+	ctx := pkcs11.New(modulePath)
+	if ctx == nil {
+		return nil, fmt.Errorf("failed to load PKCS#11 module")
+	}
+
+	err := ctx.Initialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize PKCS#11: %v", err)
+	}
+
+	slots, err := ctx.GetSlotList(true)
+	if err != nil {
+		ctx.Finalize()
+		return nil, fmt.Errorf("failed to get slots: %v", err)
+	}
+
+	log.Printf("DEBUG: Found %d slots", len(slots))
+
+	if len(slots) == 0 {
+		ctx.Finalize()
+		return nil, fmt.Errorf("no PKCS#11 slots available")
+	}
+
+	// Usar slot especificado o default
+	targetSlot := slots[0]
+	if slot < uint(len(slots)) {
+		targetSlot = slots[slot]
+	}
+
+	log.Printf("DEBUG: Using slot ID: 0x%x", targetSlot)
+
+	session, err := ctx.OpenSession(targetSlot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+	if err != nil {
+		ctx.Finalize()
+		return nil, fmt.Errorf("failed to open session: %v", err)
+	}
+
+	log.Printf("DEBUG: Opened session: %v", session)
+
+	// Login
+	err = ctx.Login(session, pkcs11.CKU_USER, pin)
+	if err != nil && err != pkcs11.Error(pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+		ctx.CloseSession(session)
+		ctx.Finalize()
+		return nil, fmt.Errorf("failed to login: %v", err)
+	}
+
+	log.Printf("DEBUG: Login successful or already logged in")
+
+	return &SoftHSMClient{
+		ctx:     ctx,
+		session: session,
+	}, nil
+}
+
+func (c *SoftHSMClient) HealthCheck(ctx context.Context) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, err := c.ctx.GetSessionInfo(c.session)
+	return err
+}
+
 func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobjects.KeyAlgorithm, size int, label string) (publicKey []byte, keyHandle string, err error) {
+	log.Printf("DEBUG [GenerateKeyPair]: algorithm=%s, size=%d, label=%s", algorithm, size, label)
+	// var pubHandle, privHandle pkcs11.ObjectHandle
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Usar tu implementación existente pero con c.session
 	var pubHandle, privHandle pkcs11.ObjectHandle
 
 	// Validar parámetros
@@ -39,22 +113,30 @@ func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobje
 
 	switch algorithm {
 	case valueobjects.RSA:
+		log.Printf("DEBUG: Generating RSA key pair")
 		pubHandle, privHandle, err = c.generateRSAKeyPair(size, label)
 	case valueobjects.ECDSA:
+		log.Printf("DEBUG: Generating ECDSA key pair")
 		pubHandle, privHandle, err = c.generateECDSAKeyPair(size, label)
 	case valueobjects.Ed25519:
+		log.Printf("DEBUG: Ed25519 not supported by SoftHSMv2 in this implementation")
 		return nil, "", fmt.Errorf("Ed25519 not supported by SoftHSMv2 in this implementation")
 	default:
+		err = fmt.Errorf("unsupported algorithm: %s", algorithm)
 		return nil, "", errors.New(string(exceptions.ErrInvalidAlgorithm))
 	}
 
 	if err != nil {
-		return nil, "", err
+		log.Printf("ERROR [GenerateKeyPair]: %v", err)
+		return nil, "", fmt.Errorf("HSM_OPERATION_FAILED: operation=generate_key_pair: %w", err)
 	}
+
+	log.Printf("DEBUG: Key pair generated, pubHandle=%d, privHandle=%d", pubHandle, privHandle)
 
 	// Exportar clave pública
 	publicKey, err = c.exportPublicKey(pubHandle)
 	if err != nil {
+		log.Printf("ERROR [exportPublicKey]: %v", err)
 		c.ctx.DestroyObject(c.session, pubHandle)
 		c.ctx.DestroyObject(c.session, privHandle)
 		return nil, "", err
@@ -62,11 +144,13 @@ func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobje
 
 	// Convertir el handle a string para almacenar
 	keyHandle = fmt.Sprintf("%d", privHandle)
+	log.Printf("DEBUG: Success - keyHandle=%s, publicKey length=%d", keyHandle, len(publicKey))
 
 	return publicKey, keyHandle, nil
 }
 
 func (c *SoftHSMClient) generateRSAKeyPair(size int, label string) (pkcs11.ObjectHandle, pkcs11.ObjectHandle, error) {
+	log.Printf("DEBUG [generateRSAKeyPair]: Creating templates for RSA %d bits, label: %s", size, label)
 	publicKeyTemplate := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
@@ -89,11 +173,43 @@ func (c *SoftHSMClient) generateRSAKeyPair(size int, label string) (pkcs11.Objec
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
 	}
 
+	log.Printf("DEBUG: Calling GenerateKeyPair...")
 	pubHandle, privHandle, err := c.ctx.GenerateKeyPair(c.session,
 		[]*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)},
 		publicKeyTemplate,
 		privateKeyTemplate,
 	)
+
+	if err != nil {
+		// Obtener error específico de PKCS#11
+		if pkcs11Err, ok := err.(pkcs11.Error); ok {
+			log.Printf("ERROR: PKCS#11 Error Code: 0x%08X", uint(pkcs11Err))
+
+			// Traducir códigos de error comunes
+			switch pkcs11Err {
+			case pkcs11.CKR_TOKEN_WRITE_PROTECTED:
+				log.Printf("ERROR: Token is write protected")
+			case pkcs11.CKR_PIN_INCORRECT:
+				log.Printf("ERROR: PIN incorrect")
+			case pkcs11.CKR_SESSION_HANDLE_INVALID:
+				log.Printf("ERROR: Session handle invalid")
+			case pkcs11.CKR_MECHANISM_INVALID:
+				log.Printf("ERROR: Mechanism invalid")
+			case pkcs11.CKR_TEMPLATE_INCOMPLETE:
+				log.Printf("ERROR: Template incomplete")
+			case pkcs11.CKR_ATTRIBUTE_TYPE_INVALID:
+				log.Printf("ERROR: Attribute type invalid")
+			case pkcs11.CKR_ATTRIBUTE_VALUE_INVALID:
+				log.Printf("ERROR: Attribute value invalid")
+			default:
+				log.Printf("ERROR: Unknown PKCS#11 error: 0x%08X", uint(pkcs11Err))
+			}
+		}
+		log.Printf("ERROR: GenerateKeyPair failed: %v", err)
+		return 0, 0, err
+	}
+
+	log.Printf("DEBUG: GenerateKeyPair successful - pubHandle=%d, privHandle=%d", pubHandle, privHandle)
 
 	return pubHandle, privHandle, err
 }

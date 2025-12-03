@@ -56,7 +56,15 @@ func main() {
 	}
 
 	// HSM Client (mock for now to compile)
-	hsmClient := hsm.NewMockHSMClient()
+	hsmClient, err := hsm.NewSoftHSMClient(
+		cfg.HSM.LibraryPath,
+		cfg.HSM.Pin,
+		cfg.HSM.Slot,
+	)
+
+	if err != nil {
+		log.Fatalf("Error initializing HSM client: %v", err)
+	}
 
 	// Repositories
 	keyRepo := postgres.NewPostgresKeyRepository(db)
@@ -98,6 +106,7 @@ func main() {
 		KeyHandler:     keyHandler,
 		AuditHandler:   auditHandler,
 		AuthMiddleware: authMiddleware,
+		HSMClient:      hsmClient,
 	})
 
 	// Start server
