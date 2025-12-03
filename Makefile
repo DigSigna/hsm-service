@@ -97,3 +97,15 @@ docker-build:
 lint-minimal:
 	@echo "Ejecutando linter mínimo..."
 	golangci-lint run -c .golangci-minimal.yml
+
+
+# GHCR build
+build-ghcr:
+	@echo "Building to GHCR..."
+	docker build -t ghcr.io/digsigna/hsm-service/hsm-service:latest -f Dockerfile .
+	@echo "Built to GHCR..."
+#push to GHCR
+push-ghcr:
+	@echo 'Pushing to GHCR...'
+	docker push ghcr.io/digsigna/hsm-service/hsm-service:latest
+	@echo 'Pushed to GHCR...'

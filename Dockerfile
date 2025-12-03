@@ -11,10 +11,12 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o api ./cmd/api
 
 # Runtime stage - MINIMAL
-FROM ubuntu:22.04
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Solo librerías runtime necesarias
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     libsofthsm2 \
