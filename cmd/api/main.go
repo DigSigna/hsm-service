@@ -1,20 +1,19 @@
 package main
 
 import (
-	"database/sql"
 	"hsm-service/internal/application/services"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/infrastructure/audit"
 	"hsm-service/internal/infrastructure/config"
+	"hsm-service/internal/infrastructure/database"
 	"hsm-service/internal/infrastructure/hsm"
-
-	// "hsm-service/internal/infrastructure/persistence/postgres"
 	"hsm-service/internal/infrastructure/persistence/mysql"
 	"hsm-service/internal/interfaces/http/handlers"
 	"hsm-service/internal/interfaces/http/middlewares"
 	"hsm-service/internal/interfaces/http/routes"
 	"hsm-service/pkg/logger"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -29,14 +28,24 @@ func main() {
 	defer zapLogger.Sync()
 
 	// Database
-	db, err := sql.Open("mysql", cfg.Database.HSM_DATABASE_CONNECTION_STRING)
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	raw := cfg.Database.ConnectionString
+	if raw == "" {
+		raw = os.Getenv("DATABASE_URL")
+	}
+	if raw == "" {
+		log.Fatalf("DATABASE_URL not provided")
 	}
 
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Database ping failed: %v", err)
+	dsn, err := database.ParseMySQLConnectionString(raw)
+	if err != nil {
+		log.Fatalf("Failed to parse DB connection string: %v", err)
 	}
+
+	db, err := database.ConnectMySQL(dsn)
+	if err != nil {
+		log.Fatalf("Failed to initialize DB: %v", err)
+	}
+	defer db.Close()
 
 	// HSM Client (mock for now to compile)
 	hsmClient, err := hsm.NewSoftHSMClient(
@@ -70,10 +79,10 @@ func main() {
 	defer auditClient.Close()
 
 	// Tenant Repo
-	var tenantReo output.TenantRepository
+	var tenantRepo output.TenantRepository = nil
 
 	// Application Services
-	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient, tenantReo)
+	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient, tenantRepo)
 	auditService := services.NewAuditService(auditRepo)
 	signingService := services.NewSigningService(keyRepo, hsmClient)
 	// Handlers

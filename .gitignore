@@ -12,3 +12,6 @@ vscode/
 
 # bin
 bin/
+
+#certs
+certs/

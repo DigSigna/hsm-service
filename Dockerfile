@@ -23,6 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Crear directorio y copiar CA
+RUN mkdir -p /usr/local/share/ca-certificates/digitalocean/
+COPY certs/ca-certificate.crt /usr/local/share/ca-certificates/digitalocean/do-mysql-ca.crt
+
+# Actualizar CA store
+RUN update-ca-certificates
+
 WORKDIR /root/
 COPY --from=builder /app/api .
 

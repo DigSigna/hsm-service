@@ -2,6 +2,8 @@ package config
 
 import (
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -17,7 +19,7 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	HSM_DATABASE_CONNECTION_STRING string `mapstructure:"connection_string"`
+	ConnectionString string `mapstructure:"connection_string"`
 }
 
 type ServerConfig struct {
@@ -50,34 +52,56 @@ func (c *Config) IsAuditEnabled() bool {
 }
 
 func LoadConfig() *Config {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./config")
+	// Obtener el entorno actual
+	env := os.Getenv("HSM_ENVIRONMENT")
+	if env == "" {
+		env = "development"
+	}
 
-	// Valores por defecto para desarrollo
-	setDefaults()
+	// viper.SetConfigName("config")
+	// viper.SetConfigType("yaml")
+	// viper.AddConfigPath(".")
+	// viper.AddConfigPath("./config")
+	// viper.AddConfigPath("/app/config") // Para Docker
 
 	// Leer variables de entorno
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("HSM")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Intentar cargar config.yaml, pero no fallar si no existe
-	if err := viper.ReadInConfig(); err != nil {
-		log.Printf("Config file not found, using environment variables and defaults: %v", err)
-	}
+	// IMPORTANTE: Para Digital Ocean Database Cluster
+	// Manejar la URL de conexión de manera específica
+	viper.BindEnv("database.connection_string", "DATABASE_URL", "HSM_DATABASE_CONNECTION_STRING")
+
+	// // Intentar cargar configuración según entorno
+	// configFileName := fmt.Sprintf("config.%s", env)
+	// viper.SetConfigName(configFileName)
+
+	// // Intentar cargar archivo de configuración
+	// if err := viper.ReadInConfig(); err != nil {
+	// 	log.Printf("Config file not found, using environment variables and defaults: %v", err)
+	// }
+
+	// Valores por defecto
+	setDefaults()
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		log.Fatalf("Unable to decode config into struct: %v", err)
 	}
 
+	// Validar configuración crítica
+	if config.Database.ConnectionString == "" {
+		log.Fatalf("Database connection string is required. Set DATABASE_URL or HSM_DATABASE_CONNECTION_STRING")
+	}
+
 	return &config
 }
 
 func setDefaults() {
-	// Database - MySQL para Digital Ocean
-	viper.SetDefault("database.connection_string", "")
+	// Database - MySQL para Digital Ocean T-ODO TOMAR DEL ENV Y REVISAR ERROR DE CERTIFICADO
+	//2025/12/03 23:56:44 Failed to initialize DB: failed to ping db: tls: failed to verify certificate: x509: certificate signed by unknown authority
+	// viper.SetDefault("database.connection_string", "DATABASE_URL")
 
 	// Server
 	viper.SetDefault("server.address", ":8080")
