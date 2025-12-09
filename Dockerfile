@@ -21,10 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libsofthsm2 \
     wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# Crear directorio y copiar CA
-RUN mkdir -p /usr/local/share/ca-certificates/digitalocean/
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/local/share/ca-certificates/digitalocean/
+    
 COPY certs/ca-certificate.crt /usr/local/share/ca-certificates/digitalocean/do-mysql-ca.crt
 
 # Actualizar CA store
