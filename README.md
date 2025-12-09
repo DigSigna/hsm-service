@@ -59,3 +59,18 @@ docker build -t hsm-service .
 # Análisis SonarQube
 ./scripts/sonar/run-sonar.sh
 ```
+
+## Conexión a Base de Datos
+Configurar variables de entorno en `.env` o en el entorno de ejecución:
+
+```env
+ENVIRONMENT=development
+DATABASE_URL=mysql://USER:PASSWORD@URI:PORT/DATABASE_NAME?ssl-mode=REQUIRED
+PORT=8080
+```
+
+Agragar Certificado de Digital Ocean (si aplica):
+
+```text
+/certs/ca-certs.crt
+```
