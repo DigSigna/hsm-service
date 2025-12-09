@@ -20,7 +20,17 @@ jobs:
         REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "repo_lower=$REPO_LOWER" >> $GITHUB_OUTPUT
-
+    
+    - name: Create certificate directory and file
+      run: |
+        # Crear directorio para certificados
+        mkdir -p certs
+        # Escribir el certificado desde el secret
+        echo "${{ secrets.DO_MYSQL_CA_CERT }}" > certs/ca-certificate.crt
+        # Verificar que se creó correctamente (opcional)
+        ls -la certs/
+        head -5 certs/ca-certificate.crt
+        
     - name: Login to GHCR
       uses: docker/login-action@v3
       with:
