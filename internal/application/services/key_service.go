@@ -47,6 +47,11 @@ func (s *keyService) CreateKey(ctx context.Context, name string, algorithm value
 		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 
+	// validar tenant
+	_, err := s.tenantRepo.FindByID(ctx, tenantID)
+	if err != nil {
+		return nil, errors.New(string(exceptions.ErrTenantNotFound))
+	}
 	keyLabel := fmt.Sprintf("%s_%s_%s", tenantID, name, uuid.New().String()[:8])
 
 	// Generar par de claves en el HSM
@@ -90,7 +95,7 @@ func (s *keyService) CreateKey(ctx context.Context, name string, algorithm value
 		TenantID:     tenantID,
 		ResourceID:   key.ID,
 		ResourceType: "CRYPTOGRAPHIC_KEY",
-		Details:      map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
+		Metadata:     map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
 		Timestamp:    time.Now().UTC(),
 	}
 
@@ -243,8 +248,7 @@ func (s *keyService) auditHSMOperation(ctx context.Context, action, tenantID, ke
 		TenantID:     tenantID,
 		ResourceID:   keyLabel,
 		ResourceType: "HSM_KEY",
-		Timestamp:    time.Now().UTC(),
-		Details:      map[string]interface{}{"key_label": keyLabel, "success": success},
+		Metadata:     map[string]interface{}{"key_label": keyLabel, "success": success},
 	}
 
 	go func() {
