@@ -7,5 +7,5 @@ import (
 
 type TenantRepository interface {
 	FindByID(ctx context.Context, id string) (*entities.Tenant, error)
-	Save(ctx context.Context, tenant *entities.Tenant) error
+	Exists(ctx context.Context, id string) (bool, error)
 }
