@@ -14,7 +14,6 @@ import (
 type RouterDependencies struct {
 	Logger         logger.Logger
 	KeyHandler     *handlers.KeyHandler
-	AuditHandler   *handlers.AuditHandler
 	AuthMiddleware *middlewares.AuthMiddleware
 	HSMClient      output.HSMClient
 }
@@ -79,13 +78,6 @@ func SetupRouter(deps *RouterDependencies) *gin.Engine {
 				keys.POST("", deps.KeyHandler.CreateKey)
 				keys.GET("/:tenant_id", deps.KeyHandler.ListKeys)
 				keys.POST("/sign", deps.KeyHandler.SignHash)
-			}
-
-			// Audit routes - Agregar estas rutas
-			audit := protected.Group("/audit")
-			{
-				audit.POST("/log", deps.AuditHandler.LogAudit)
-				audit.GET("/events", deps.AuditHandler.GetAuditEvents)
 			}
 		}
 	}

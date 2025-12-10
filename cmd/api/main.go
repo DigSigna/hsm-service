@@ -60,7 +60,8 @@ func main() {
 
 	// Repositories
 	keyRepo := mysql.NewMySqlKeyRepository(db)
-	auditRepo := mysql.NewAuditRepository(db)
+	// auditRepo := mysql.NewMySqlAuditRepository(db)
+	tenantRepo := mysql.NewMySqlTenantRepository(db)
 
 	//  CLIENTE DE AUDITORÍA
 	var auditClient output.AuditClient
@@ -78,16 +79,11 @@ func main() {
 	}
 	defer auditClient.Close()
 
-	// Tenant Repo
-	var tenantRepo output.TenantRepository = nil
-
 	// Application Services
 	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient, tenantRepo)
-	auditService := services.NewAuditService(auditRepo)
 	signingService := services.NewSigningService(keyRepo, hsmClient)
 	// Handlers
 	keyHandler := handlers.NewKeyHandler(zapLogger, keyService, signingService)
-	auditHandler := handlers.NewAuditHandler(zapLogger, auditService)
 
 	// Middlewares
 	authMiddleware := middlewares.NewAuthMiddleware(zapLogger, nil)
@@ -96,7 +92,6 @@ func main() {
 	router := routes.SetupRouter(&routes.RouterDependencies{
 		Logger:         zapLogger,
 		KeyHandler:     keyHandler,
-		AuditHandler:   auditHandler,
 		AuthMiddleware: authMiddleware,
 		HSMClient:      hsmClient,
 	})

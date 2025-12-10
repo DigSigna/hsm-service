@@ -13,7 +13,7 @@ type AuditEvent struct {
 	TenantID     string                 `json:"tenant_id"`
 	ResourceID   string                 `json:"resource_id"` // key_id, document_id, etc.
 	ResourceType string                 `json:"resource_type"`
-	Details      map[string]interface{} `json:"details,omitempty"`
+	Details      string                 `json:"details,omitempty"`
 	Timestamp    time.Time              `json:"timestamp"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	IPAddress    string                 `json:"ip_address,omitempty"`

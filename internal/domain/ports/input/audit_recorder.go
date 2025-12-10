@@ -7,5 +7,5 @@ import (
 
 type AuditRecorder interface {
 	RecordEvent(ctx context.Context, event *entities.AuditEvent) error
-	RecordSecurityEvent(ctx context.Context, action, actor, tenantID, resourceID, resourceType string) error
+	// RecordSecurityEvent(ctx context.Context, action, actor, tenantID, resourceID, resourceType string) error
 }

@@ -17,7 +17,6 @@ func TestHealthEndpoint(t *testing.T) {
 	router := routes.SetupRouter(&routes.RouterDependencies{
 		Logger:         logger,
 		KeyHandler:     nil, // Mock para test básico
-		AuditHandler:   nil,
 		AuthMiddleware: nil,
 	})
 
@@ -41,7 +40,6 @@ func TestReadyEndpoint(t *testing.T) {
 	router := routes.SetupRouter(&routes.RouterDependencies{
 		Logger:         logger,
 		KeyHandler:     nil,
-		AuditHandler:   nil,
 		AuthMiddleware: nil,
 	})
 

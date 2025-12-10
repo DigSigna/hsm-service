@@ -13,10 +13,11 @@ import (
 )
 
 type cryptoService struct {
-	hsmClient   output.HSMClient
-	keyRepo     output.KeyRepository
-	tenantRepo  output.TenantRepository
-	auditClient output.AuditClient
+	hsmClient  output.HSMClient
+	keyRepo    output.KeyRepository
+	tenantRepo output.TenantRepository
+	// auditClient output.AuditClient
+	auditRecorder input.AuditRecorder
 }
 
 var _ input.CryptoService = (*cryptoService)(nil)
@@ -25,13 +26,13 @@ func NewCryptoService(
 	hsmClient output.HSMClient,
 	keyRepo output.KeyRepository,
 	tenantRepo output.TenantRepository,
-	auditClient output.AuditClient,
+	auditRecorder input.AuditRecorder,
 ) input.CryptoService {
 	return &cryptoService{
-		hsmClient:   hsmClient,
-		keyRepo:     keyRepo,
-		tenantRepo:  tenantRepo,
-		auditClient: auditClient,
+		hsmClient:     hsmClient,
+		keyRepo:       keyRepo,
+		tenantRepo:    tenantRepo,
+		auditRecorder: auditRecorder,
 	}
 }
 
@@ -222,14 +223,14 @@ func (s *cryptoService) auditCryptoOperation(ctx context.Context, action, tenant
 		ResourceID:   keyLabel,
 		ResourceType: "HSM_KEY",
 		Timestamp:    time.Now().UTC(),
-		Details:      map[string]interface{}{"key_label": keyLabel, "success": success},
+		Metadata:     map[string]interface{}{"key_label": keyLabel, "success": success},
 	}
 
 	go func() {
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		if err := s.auditClient.LogSecurityEvent(timeoutCtx, event); err != nil {
+		if err := s.auditRecorder.RecordEvent(timeoutCtx, &event); err != nil {
 			// Log local del error de auditoría
 			// log.Printf("WARNING: Failed to audit crypto operation: %v", err)
 		}
