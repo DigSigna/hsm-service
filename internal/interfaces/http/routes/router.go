@@ -5,6 +5,7 @@ import (
 	"hsm-service/internal/interfaces/http/handlers"
 	"hsm-service/internal/interfaces/http/middlewares"
 	"hsm-service/pkg/logger"
+	"hsm-service/pkg/request"
 
 	"time"
 
@@ -21,6 +22,7 @@ type RouterDependencies struct {
 func SetupRouter(deps *RouterDependencies) *gin.Engine {
 	router := gin.New()
 
+	router.Use(request.GinMiddleware())
 	// Global middlewares
 	router.Use(middlewares.RecoveryMiddleware(deps.Logger))
 	router.Use(middlewares.LoggingMiddleware(deps.Logger))

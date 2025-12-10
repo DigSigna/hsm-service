@@ -9,6 +9,7 @@ import (
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/pkg/request"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,20 +39,67 @@ func NewKeyService(
 }
 
 func (s *keyService) CreateKey(ctx context.Context, name string, algorithm valueobjects.KeyAlgorithm, size int, usage valueobjects.KeyUsage, tenantID string) (*entities.CryptographicKey, error) {
+	metadata := request.ContextValuesFromContext(ctx)
+
+	go s.auditHSMOperation(ctx,
+		"HSM_KEY_CREATION_ATTEMPT",
+		metadata.Actor,
+		tenantID,
+		"",
+		"HSM_KEY",
+		"Attempting to create HSM key",
+		map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
+		metadata.IPAddress,
+		metadata.UserAgent,
+	)
 	// Validar parámetros de entrada
 	if !algorithm.IsValid() {
+		go s.auditHSMOperation(ctx,
+			"HSM_KEY_CREATION_FAILED",
+			metadata.Actor,
+			tenantID,
+			"",
+			"HSM_KEY",
+			"Invalid key algorithm",
+			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
+			metadata.IPAddress,
+			metadata.UserAgent,
+		)
 		return nil, errors.New(string(exceptions.ErrInvalidKeyAlgorithm))
 	}
 
 	if !usage.IsValid() {
+		go s.auditHSMOperation(ctx,
+			"HSM_KEY_CREATION_FAILED",
+			metadata.Actor,
+			tenantID,
+			"",
+			"HSM_KEY",
+			"Invalid key usage",
+			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
+			metadata.IPAddress,
+			metadata.UserAgent,
+		)
 		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 
 	// validar tenant
 	_, err := s.tenantRepo.FindByID(ctx, tenantID)
 	if err != nil {
+		go s.auditHSMOperation(ctx,
+			"HSM_KEY_CREATION_FAILED",
+			metadata.Actor,
+			tenantID,
+			"",
+			"HSM_KEY",
+			"Tenant not found",
+			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
+			metadata.IPAddress,
+			metadata.UserAgent,
+		)
 		return nil, errors.New(string(exceptions.ErrTenantNotFound))
 	}
+
 	keyLabel := fmt.Sprintf("%s_%s_%s", tenantID, name, uuid.New().String()[:8])
 
 	// Generar par de claves en el HSM
@@ -192,7 +240,7 @@ func (s *keyService) CreateHSMKey(ctx context.Context, label string, algorithm v
 	}
 
 	// Auditoría
-	go s.auditHSMOperation(ctx, "HSM_KEY_CREATED", tenantID, label, err == nil)
+	// go s.auditHSMOperation(ctx, "HSM_KEY_CREATED", tenantID, label, err == nil)
 
 	return hsmKey, nil
 }
@@ -241,14 +289,27 @@ func (s *keyService) GetHSMPublicKey(ctx context.Context, keyLabel, tenantID str
 }
 
 // Método auxiliar para auditoría de operaciones HSM
-func (s *keyService) auditHSMOperation(ctx context.Context, action, tenantID, keyLabel string, success bool) {
+func (s *keyService) auditHSMOperation(ctx context.Context,
+	action,
+	actor,
+	tenantID,
+	resourceID string,
+	resourceType string,
+	details string,
+	metadata map[string]interface{},
+	ipAddress,
+	userAgent string,
+) {
 	event := entities.AuditEvent{
 		Action:       action,
-		Actor:        "system",
+		Actor:        actor,
 		TenantID:     tenantID,
-		ResourceID:   keyLabel,
-		ResourceType: "HSM_KEY",
-		Metadata:     map[string]interface{}{"key_label": keyLabel, "success": success},
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		Details:      details,
+		Metadata:     metadata,
+		IPAddress:    ipAddress,
+		UserAgent:    userAgent,
 	}
 
 	go func() {
