@@ -1,0 +1,45 @@
+FROM golang:1.25.4-bookworm AS builder
+
+# WORKDIR /app
+# COPY go.mod go.sum ./
+# RUN go mod download
+# COPY . .
+
+# RUN CGO_ENABLED=1 GOOS=linux go build -o api ./cmd/api
+
+# # FROM debian:bookworm-slim
+# FROM golang:1.25-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    libsofthsm2 \
+    git \
+    gcc \
+    musl-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/local/share/ca-certificates/digitalocean/
+
+
+COPY certs/ca-certificate.crt /usr/local/share/ca-certificates/digitalocean/do-mysql-ca.crt
+
+# copy .air.toml for air configuration
+# Actualizar CA store
+RUN update-ca-certificates
+
+
+RUN go install github.com/air-verse/air@latest
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+WORKDIR /app
+# COPY --from=builder /app/api .
+# COPY .air.toml .
+
+# Exponer puertos
+EXPOSE 8080 2345
+
+# Comando por defecto (se sobrescribe en docker-compose)
+CMD ["air", "-c", ".air.toml"]

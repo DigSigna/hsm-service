@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  hsm-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      HSM_ENVIRONMENT: development
+      DATABASE_URL: "hsm_user:hsm_password@tcp(mysql:3306)/hsm_db?parseTime=true&tls=skip-verify"
+      HSM_LIBRARY_PATH: "/usr/lib/softhsm/libsofthsm2.so"
+      HSM_TOKEN_LABEL: "digsigna-token"
+      HSM_PIN: "1234"
+    ports:
+      - "8080:8080"
+      - "2345:2345"  # Delve debug port
+    volumes:
+      - .:/app
+      - hsm_tokens:/var/lib/softhsm/tokens
+    command: >
+      sh -c "
+        dlv debug --listen=:2345 --headless=true --api-version=2 --accept-multiclient ./cmd/api/main.go
+      "
+    depends_on:
+      - mysql
+      - redis
+      - softhsm
+
+  softhsm:
+    image: ghcr.io/digsigna/softhsm/softhsm:latest
+    # O usar una imagen local si la tienes
+    # build: ./softhsm-docker
+    volumes:
+      - hsm_tokens:/var/lib/softhsm/tokens
+      - ./config/softhsm2.conf:/etc/softhsm2.conf
+    environment:
+      TOKEN_LABEL: "digsigna-token"
+      USER_PIN: "1234"
+      SO_PIN: "123456"
+    command: >
+      sh -c "
+        # Inicializar token si no existe
+        if [ ! -f /var/lib/softhsm/tokens/token_initialized ]; then
+          softhsm2-util --init-token --free --label $${TOKEN_LABEL} --pin $${USER_PIN} --so-pin $${SO_PIN} && 
+          touch /var/lib/softhsm/tokens/token_initialized
+        fi &&
+        # Mantener el contenedor corriendo
+        tail -f /dev/null
+      "
+    networks:
+      - hsm-network
+      
+volumes:
+  mysql_data:
+  hsm_tokens:
+
+networks:
+  hsm-network:
+    driver: bridge
