@@ -3,6 +3,8 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"hsm-service/internal/domain/entities"
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/valueobjects"
@@ -29,7 +31,11 @@ func (r *mysqlAuditRepository) RecordEvent(ctx context.Context, event *entities.
 		details, ip_address, user_agent) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `
+	metadataJSON, errj := json.Marshal(event.Metadata)
+	if errj != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", errj)
+	}
 
-	_, err := r.db.ExecContext(ctx, query, tenantID, event.Action, event.Metadata, event.ResourceID, event.ResourceType, event.Details, event.IPAddress, event.UserAgent)
+	_, err := r.db.ExecContext(ctx, query, tenantID, event.Action, metadataJSON, event.ResourceID, event.ResourceType, event.Details, event.IPAddress, event.UserAgent)
 	return err
 }

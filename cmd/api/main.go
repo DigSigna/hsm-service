@@ -2,8 +2,8 @@ package main
 
 import (
 	"hsm-service/internal/application/services"
-	"hsm-service/internal/domain/ports/output"
-	"hsm-service/internal/infrastructure/audit"
+	// "hsm-service/internal/domain/ports/output"
+	// "hsm-service/internal/infrastructure/audit"
 	"hsm-service/internal/infrastructure/config"
 	"hsm-service/internal/infrastructure/database"
 	"hsm-service/internal/infrastructure/hsm"
@@ -14,7 +14,8 @@ import (
 	"hsm-service/pkg/logger"
 	"log"
 	"os"
-	"time"
+
+	// "time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -46,7 +47,6 @@ func main() {
 		log.Fatalf("Failed to initialize DB: %v", err)
 	}
 	defer db.Close()
-
 	// HSM Client (mock for now to compile)
 	hsmClient, err := hsm.NewSoftHSMClient(
 		cfg.HSM.LibraryPath,
@@ -60,24 +60,26 @@ func main() {
 
 	// Repositories
 	keyRepo := mysql.NewMySqlKeyRepository(db)
-	// auditRepo := mysql.NewMySqlAuditRepository(db)
+	auditRepo := mysql.NewMySqlAuditRepository(db)
 	tenantRepo := mysql.NewMySqlTenantRepository(db)
 
-	//  CLIENTE DE AUDITORÍA
-	var auditClient output.AuditClient
-	if cfg.Audit.Enabled && cfg.Audit.BaseURL != "" {
-		// Usar cliente REST para producción
-		auditClient = audit.NewRestAuditClient(
-			cfg.Audit.BaseURL,
-			10*time.Second, // timeout
-		)
-		log.Printf("Audit client configured for: %s", cfg.Audit.BaseURL)
-	} else {
-		// Usar mock para desarrollo
-		auditClient = audit.NewMockAuditClient()
-		log.Printf("Using mock audit client for development")
-	}
-	defer auditClient.Close()
+	//  CLIENTE DE AUDITORÍA to-do with audit-service
+	// var auditClient output.AuditClient
+	// if cfg.Audit.Enabled && cfg.Audit.BaseURL != "" {
+	// 	// Usar cliente REST para producción
+	// 	auditClient = audit.NewRestAuditClient(
+	// 		cfg.Audit.BaseURL,
+	// 		10*time.Second, // timeout
+	// 	)
+	// 	log.Printf("Audit client configured for: %s", cfg.Audit.BaseURL)
+	// } else {
+	// 	// Usar mock para desarrollo
+	// 	auditClient = audit.NewMockAuditClient()
+	// 	log.Printf("Using mock audit client for development")
+	// }
+	// defer auditClient.Close()
+
+	auditClient := services.NewAuditService(auditRepo)
 
 	// Application Services
 	keyService := services.NewKeyService(keyRepo, hsmClient, auditClient, tenantRepo)

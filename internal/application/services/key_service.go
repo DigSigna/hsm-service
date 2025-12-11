@@ -10,15 +10,17 @@ import (
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
 	"hsm-service/pkg/request"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type keyService struct {
-	keyRepo     output.KeyRepository
-	hsmClient   output.HSMClient
-	auditClient output.AuditClient
+	keyRepo   output.KeyRepository
+	hsmClient output.HSMClient
+	// auditClient output.AuditClient implementation that logs to audit-service
+	auditClient input.AuditRecorder
 	tenantRepo  output.TenantRepository
 }
 
@@ -27,7 +29,8 @@ var _ input.KeyManager = (*keyService)(nil)
 func NewKeyService(
 	keyRepo output.KeyRepository,
 	hsmClient output.HSMClient,
-	auditClient output.AuditClient,
+	// auditClient output.AuditClient,
+	auditClient input.AuditRecorder,
 	tenantRepo output.TenantRepository,
 ) input.KeyManager {
 	return &keyService{
@@ -152,7 +155,7 @@ func (s *keyService) CreateKey(ctx context.Context, name string, algorithm value
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		if err := s.auditClient.LogSecurityEvent(timeoutCtx, auditEvent); err != nil {
+		if err := s.auditClient.RecordEvent(timeoutCtx, &auditEvent); err != nil {
 			// Log local del error de auditoría, pero no falla la operación
 			// log.Printf("WARNING: Failed to audit key creation: %v", err)
 		}
@@ -316,8 +319,8 @@ func (s *keyService) auditHSMOperation(ctx context.Context,
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		if err := s.auditClient.LogSecurityEvent(timeoutCtx, event); err != nil {
-			// Log local del error de auditoría
+		if err := s.auditClient.RecordEvent(timeoutCtx, &event); err != nil {
+			log.Printf("WARNING: Failed to audit HSM operation: %v", err)
 		}
 	}()
 }

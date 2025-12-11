@@ -1,0 +1,90 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+
+  # SoftHSM (simulando el sidecar)
+  softhsm:
+    image: ghcr.io/digsigna/softhsm/softhsm:latest
+    # O usar una imagen local si la tienes
+    # build: ./softhsm-docker
+    volumes:
+      - hsm_tokens:/var/lib/softhsm/tokens
+      - ./config/softhsm2.conf:/etc/softhsm2.conf
+      - ./config/init-token-if-empty.sh:/usr/local/bin/init-token-if-empty.sh
+    environment:
+      TOKEN_LABEL: "digsigna-token"
+      USER_PIN: "1234"
+      SO_PIN: "5678"
+      SOFTHSM2_CONF: "/etc/softhsm2.conf"
+    entrypoint: >
+      sh -c "
+        echo '=== INICIANDO SCRIPT DE INICIALIZACIÓN ===' &&
+        chmod +x /usr/local/bin/init-token-if-empty.sh &&
+        /usr/local/bin/init-token-if-empty.sh &&
+        echo '=== SCRIPT COMPLETADO. MOSTRANDO TOKENS ===' &&
+        softhsm2-util --show-slots &&
+        echo '=== MANTENIENDO CONTENEDOR ACTIVO ===' &&
+        tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD", "softhsm2-util", "--show-slots"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - hsm-network
+
+  # HSM Service (con hot reload para desarrollo)
+  hsm-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev  # Usar Dockerfile especial para dev
+    environment:
+      # Variables de entorno (similar a k8s)
+      HSM_ENVIRONMENT: development
+      DATABASE_URL: "digsigna:AVNS_yc_W7Jtf67Yjuy8RvNJ@tcp(bitacoradigital-database-dec-26-backup-do-user-7050795-0.b.db.ondigitalocean.com:25060)/digsigna_mvp?tls=true&timeout=30s&parseTime=true"
+      SOFTHSM2_CONF: "/etc/softhsm2.conf"
+      HSM_LIBRARY_PATH: "/usr/lib/softhsm/libsofthsm2.so"
+      HSM_TOKEN_LABEL: "digsigna-token"
+      HSM_PIN: "1234"
+      HSM_SLOT: "0"
+      # Para desarrollo
+      GIN_MODE: debug
+    volumes:
+      # Montar el código fuente para hot reload
+      - .:/app
+      # Compartir tokens HSM con el contenedor softhsm
+      - hsm_tokens:/var/lib/softhsm/tokens
+      # Configuración de SoftHSM
+      - ./config/softhsm2.conf:/etc/softhsm2.conf
+      # Configuración de la app
+      # - ./config/config.yaml:/app/config.yaml
+      - ./config/config.yaml:/app/config.yaml
+      # - ./config/hsm-service-config.yaml:/root/config/config.yaml
+    ports:
+      - "8080:8080"
+      - "2345:2345"  # Para debugging con delve
+    depends_on:
+      # mysql:
+      #   condition: service_healthy
+      # redis:
+      #   condition: service_started
+      softhsm:
+        condition: service_started
+    command: air -c .air.toml
+    networks:
+      - hsm-network
+    # Health check opcional
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  hsm_tokens:
+
+networks:
+  hsm-network:
+    driver: bridge

@@ -8,7 +8,11 @@ BUILDER_IMAGE = go-cgo-builder:1.25
 OUTPUT = bin/api
 SOURCE = ./cmd/api
 
-.PHONY: sonar-up sonar-down sonar-local test coverage lint quality
+# 
+DOCKER_COMPOSE_DEV = docker-compose -f docker-compose.dev.yml
+
+
+.PHONY: sonar-up sonar-down sonar-local test coverage lint quality dev dev-up dev-down dev-logs dev-restart dev-shell test
 
 # SonarQube Local
 sonar-up:
@@ -83,7 +87,7 @@ builder-image:
 # ---------------------------------------------------------
 # Limpieza
 # ---------------------------------------------------------
-clean:
+cleamn:
 	@echo ">> Limpiando binarios..."
 	rm -rf bin/*
 
@@ -109,3 +113,47 @@ push-ghcr:
 	@echo 'Pushing to GHCR...'
 	docker push ghcr.io/digsigna/hsm-service/hsm-service:latest
 	@echo 'Pushed to GHCR...'
+
+# Desarrollo
+dev: dev-up dev-logs
+
+dev-up:
+	@echo "Starting development environment..."
+	@$(DOCKER_COMPOSE_DEV) up -d --build
+	@echo "Services running:"
+	@echo "  - HSM Service: http://localhost:8080"
+	@echo "  - Debug: localhost:2345"
+
+dev-down:
+	@echo "Stopping development environment..."
+	@$(DOCKER_COMPOSE_DEV) down
+
+dev-logs:
+	@$(DOCKER_COMPOSE_DEV) logs -f hsm-service
+
+dev-restart:
+	@$(DOCKER_COMPOSE_DEV) restart hsm-service
+
+dev-shell:
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service sh
+
+# Testing
+test:
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service go test ./... -v
+
+test-coverage:
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service go test ./... -coverprofile=coverage.out
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service go tool cover -html=coverage.out -o coverage.html
+
+# Database migrations
+migrate-up:
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service go run cmd/migrate/main.go up
+
+migrate-down:
+	@$(DOCKER_COMPOSE_DEV) exec hsm-service go run cmd/migrate/main.go down
+
+# Clean
+clean:
+	@$(DOCKER_COMPOSE_DEV) down -v
+	@rm -rf ./tmp
+	@docker system prune -f
