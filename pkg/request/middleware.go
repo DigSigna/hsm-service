@@ -8,6 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type key string
+
+const CorrelationIDKey key = "correlation_id"
+
 // GinMiddleware es el middleware para Gin que extrae metadata
 func GinMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -24,8 +28,16 @@ func GinMiddleware() gin.HandlerFunc {
 			c.Header("X-Request-ID", requestID)
 		}
 
+		correlationID := ExtractCorrelationID(c.Request)
+
+		c.Set(string(CorrelationIDKey), correlationID)
+
+		sessionID := c.GetHeader("X-Session-ID")
+
 		// Crear nuevo contexto con los valores
 		ctx := c.Request.Context()
+		ctx = context.WithValue(ctx, correlationIDKey, correlationID)
+		ctx = context.WithValue(ctx, sessionIDKey, sessionID)
 		ctx = context.WithValue(ctx, ipAddressKey, ip)
 		ctx = context.WithValue(ctx, userAgentKey, userAgent)
 		ctx = context.WithValue(ctx, requestIDKey, requestID)
@@ -46,6 +58,12 @@ func generateRequestID() string {
 // HTTPMiddleware es para net/http estándar
 func HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// extraer session id y correlation id si aplicable
+		// Aquí asumimos que vienen en headers, ajustar según necesidad
+		correlationID := ExtractCorrelationID(r)
+
+		sessionID := r.Header.Get("X-Session-ID")
+
 		ip := ExtractClientIP(r)
 		userAgent := ExtractUserAgent(r)
 		actor := ExtractActor(r)
@@ -57,6 +75,8 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := r.Context()
+		ctx = context.WithValue(ctx, correlationIDKey, correlationID)
+		ctx = context.WithValue(ctx, sessionIDKey, sessionID)
 		ctx = context.WithValue(ctx, ipAddressKey, ip)
 		ctx = context.WithValue(ctx, userAgentKey, userAgent)
 		ctx = context.WithValue(ctx, requestIDKey, requestID)

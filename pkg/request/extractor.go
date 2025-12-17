@@ -4,7 +4,18 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
+
+// extract X-Correlation-ID
+func ExtractCorrelationID(r *http.Request) string {
+	correlationID := r.Header.Get("X-Correlation-ID")
+	if correlationID == "" {
+		correlationID = uuid.New().String()
+	}
+	return correlationID
+}
 
 // ExtractClientIP extrae la IP real del cliente considerando proxies
 func ExtractClientIP(r *http.Request) string {
