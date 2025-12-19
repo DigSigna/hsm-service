@@ -10,20 +10,20 @@ type CreateKeyRequest struct {
 
 // CreateKeyResponse DTO para respuesta de creación
 type CreateKeyResponse struct {
-	KeyID      string `json:"key_id"`
-	Name       string `json:"name"`
-	Algorithm  string `json:"algorithm"`
-	KeySize    int    `json:"key_size"`
-	PublicKey  string `json:"public_key,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	KeyID     string `json:"key_id"`
+	Name      string `json:"name"`
+	Algorithm string `json:"algorithm"`
+	KeySize   int    `json:"key_size"`
+	PublicKey string `json:"public_key,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 // SignDocumentRequest DTO para firmado
 type SignDocumentRequest struct {
-	KeyID        string            `json:"key_id" validate:"required,uuid"`
-	DocumentHash string            `json:"document_hash" validate:"required,base64"`
-	TenantID     string            `json:"tenant_id" validate:"required,uuid"`
-	Options      *SigningOptions   `json:"options,omitempty"`
+	KeyID        string          `json:"key_id" validate:"required,uuid"`
+	DocumentHash string          `json:"document_hash" validate:"required,base64"`
+	TenantID     string          `json:"tenant_id" validate:"required,uuid"`
+	Options      *SigningOptions `json:"options,omitempty"`
 }
 
 // SigningOptions DTO para opciones de firmado
@@ -34,8 +34,8 @@ type SigningOptions struct {
 
 // SignDocumentResponse DTO para respuesta de firmado
 type SignDocumentResponse struct {
-	Signature  string `json:"signature"` // Base64 encoded
-	KeyID      string `json:"key_id"`
-	Algorithm  string `json:"algorithm"`
-	SignedAt   string `json:"signed_at"`
+	Signature string `json:"signature"` // Base64 encoded
+	KeyID     string `json:"key_id"`
+	Algorithm string `json:"algorithm"`
+	SignedAt  string `json:"signed_at"`
 }

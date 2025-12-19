@@ -10,6 +10,7 @@ import (
 	"hsm-service/internal/domain/exceptions"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"log"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -17,55 +18,65 @@ import (
 
 const errFailedToUnmarshalMetadata = "failed to unmarshal metadata"
 
-type mysqlKeyRepository struct {
+type MySQLKeyStorage struct {
 	db *sql.DB
 }
 
 // Garantiza implementación del puerto
-var _ output.KeyRepository = (*mysqlKeyRepository)(nil)
+var _ output.KeyRepository = (*MySQLKeyStorage)(nil)
 
-func NewMySqlKeyRepository(db *sql.DB) output.KeyRepository {
-	return &mysqlKeyRepository{db: db}
+func NewMySQLKeyStorage(db *sql.DB) output.KeyRepository {
+	return &MySQLKeyStorage{db: db}
 }
 
-func (r *mysqlKeyRepository) Save(ctx context.Context, key *entities.CryptographicKey) error {
+func (r *MySQLKeyStorage) Save(ctx context.Context, key *entities.CryptographicKey) error {
 	query := `
-		INSERT INTO cryptographic_keys (
-			name, algorithm, key_size, usage, public_key, key_handle, tenant_id, version, created_at, is_active, metadata
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			name = VALUES(name),
-			algorithm = VALUES(algorithm),
-			key_size = VALUES(key_size),
-			usage = VALUES(usage),
-			public_key = VALUES(public_key),
-			key_handle = VALUES(key_handle),
-			tenant_id = VALUES(tenant_id),
-			version = VALUES(version),
-			created_at = VALUES(created_at),
-			is_active = VALUES(is_active),
-			metadata = VALUES(metadata)
+		INSERT INTO crypto_keys (
+			tenant_id,
+
+			name,
+			alias,
+
+			algorithm,
+			key_size,
+			purpose,
+			
+			public_key,
+			key_handle,
+			key_label,
+
+			is_hardware_backed,
+			hsm_slot,
+
+			expiration_date,
+
+			is_active,
+			version
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	// Convertir metadata a JSONB
-	metadataJSON, err := json.Marshal(key.Metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
+	_, err := r.db.ExecContext(ctx, query,
+		key.TenantID,
 
-	_, err = r.db.ExecContext(ctx, query,
-		key.ID,
 		key.Name,
+		key.Name, //alias same as name for now
+
 		string(key.Algorithm),
 		key.KeySize,
 		string(key.Usage),
+
 		key.PublicKey,
 		key.KeyHandle,
-		key.TenantID,
-		key.Version,
-		key.CreatedAt,
+		key.KeyLabel,
+
+		true, //is_hardware_backed
+		key.HSMSlot,
+
+		key.ExpirationDate,
+
 		key.IsActive,
-		metadataJSON,
+		key.Version,
 	)
 
 	if err != nil {
@@ -75,59 +86,54 @@ func (r *mysqlKeyRepository) Save(ctx context.Context, key *entities.Cryptograph
 	return nil
 }
 
-func (r *mysqlKeyRepository) FindByID(ctx context.Context, id string) (*entities.CryptographicKey, error) {
-	tenantID, _ := valueobjects.TenantFromContext(ctx)
+func (r *MySQLKeyStorage) FindByID(ctx context.Context, id string) (*entities.CryptographicKey, error) {
+	log.Println("Finding key by ID:", id)
 	query := `
-		SELECT id, name, algorithm, key_size, usage, public_key, key_handle, tenant_id, version, created_at, is_active, metadata
-		FROM cryptographic_keys
-		WHERE id = ? AND tenant_id = ?
+		SELECT id, name, public_key, created_at, expiration_date
+		FROM crypto_keys
+		WHERE id = ?
 	`
 
 	var key entities.CryptographicKey
 	var algorithmStr, usageStr string
-	var metadataJSON []byte
-	var createdAt time.Time
+	var createdAt, expiredAt time.Time
 
-	err := r.db.QueryRowContext(ctx, query, id, tenantID).Scan(
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&key.ID,
 		&key.Name,
-		&algorithmStr,
-		&key.KeySize,
-		&usageStr,
 		&key.PublicKey,
-		&key.KeyHandle,
-		&key.TenantID,
-		&key.Version,
 		&createdAt,
-		&key.IsActive,
-		&metadataJSON,
+		&key.ExpirationDate,
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, errors.New(string(exceptions.ErrKeyNotFound))
+		log.Println("Key not found with ID:", id)
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrKeyNotFound,
+			"key not found",
+		).WithDetail("original_error", err.Error())
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to find key: %w", err)
+		log.Println("Error finding key by ID:", err)
+		// return nil, fmt.Errorf("failed to find key: %w", err)
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrKeyNotFound,
+			"Error finding key",
+		).WithDetail("original_error", err.Error())
 	}
 
 	// Convertir string a KeyAlgorithm
 	key.Algorithm = valueobjects.KeyAlgorithm(algorithmStr)
 	key.Usage = valueobjects.KeyUsage(usageStr)
 	key.CreatedAt = createdAt
-
-	// Convertir metadata de JSONB
-	if len(metadataJSON) > 0 {
-		if err := json.Unmarshal(metadataJSON, &key.Metadata); err != nil {
-			return nil, fmt.Errorf(errFailedToUnmarshalMetadata)
-		}
-	}
+	key.ExpirationDate = expiredAt
 
 	return &key, nil
 }
 
-func (r *mysqlKeyRepository) FindByIDAndTenant(ctx context.Context, id, tenantID string) (*entities.CryptographicKey, error) {
+func (r *MySQLKeyStorage) FindByIDAndTenant(ctx context.Context, id, tenantID string) (*entities.CryptographicKey, error) {
 	query := `
 		SELECT id, name, algorithm, key_size, usage, public_key, key_handle, tenant_id, version, created_at, is_active, metadata
-		FROM cryptographic_keys
+		FROM crypto_keys
 		WHERE id = ? AND tenant_id = ?
 	`
 
@@ -170,10 +176,15 @@ func (r *mysqlKeyRepository) FindByIDAndTenant(ctx context.Context, id, tenantID
 	return &key, nil
 }
 
-func (r *mysqlKeyRepository) FindByTenant(ctx context.Context, tenantID string) ([]*entities.CryptographicKey, error) {
+func (r *MySQLKeyStorage) FindByTenant(ctx context.Context, tenantID string) ([]*entities.CryptographicKey, error) {
 	query := `
-		SELECT id, name, algorithm, key_size, usage, public_key, key_handle, tenant_id, version, created_at, is_active, metadata
-		FROM cryptographic_keys
+		SELECT id, name, alias, 
+			algorithm, key_size, purpose,
+			public_key, key_handle, key_label,
+			tenant_id,
+			version, is_active,
+			created_at, expiration_date 
+		FROM crypto_keys
 		WHERE tenant_id = ?
 		ORDER BY created_at DESC
 	`
@@ -188,22 +199,25 @@ func (r *mysqlKeyRepository) FindByTenant(ctx context.Context, tenantID string) 
 	for rows.Next() {
 		var key entities.CryptographicKey
 		var algorithmStr, usageStr string
-		var metadataJSON []byte
 		var createdAt time.Time
+		// time or null
+		var expiredAt sql.NullTime
 
 		if err := rows.Scan(
 			&key.ID,
 			&key.Name,
+			&key.Alias,
 			&algorithmStr,
 			&key.KeySize,
-			&usageStr,
+			&key.Usage,
 			&key.PublicKey,
 			&key.KeyHandle,
+			&key.KeyLabel,
 			&key.TenantID,
 			&key.Version,
-			&createdAt,
 			&key.IsActive,
-			&metadataJSON,
+			&createdAt,
+			&expiredAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan key: %w", err)
 		}
@@ -211,11 +225,8 @@ func (r *mysqlKeyRepository) FindByTenant(ctx context.Context, tenantID string) 
 		key.Algorithm = valueobjects.KeyAlgorithm(algorithmStr)
 		key.Usage = valueobjects.KeyUsage(usageStr)
 		key.CreatedAt = createdAt
-
-		if len(metadataJSON) > 0 {
-			if err := json.Unmarshal(metadataJSON, &key.Metadata); err != nil {
-				return nil, fmt.Errorf(errFailedToUnmarshalMetadata)
-			}
+		if expiredAt.Valid {
+			key.ExpirationDate = expiredAt.Time
 		}
 
 		keys = append(keys, &key)
@@ -228,8 +239,8 @@ func (r *mysqlKeyRepository) FindByTenant(ctx context.Context, tenantID string) 
 	return keys, nil
 }
 
-func (r *mysqlKeyRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM cryptographic_keys WHERE id = ?`
+func (r *MySQLKeyStorage) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM crypto_keys WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {

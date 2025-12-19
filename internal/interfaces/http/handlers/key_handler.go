@@ -40,7 +40,11 @@ type SignHashRequest struct {
 func (h *KeyHandler) CreateKey(c *gin.Context) {
 	var req CreateKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "INVALID_REQUEST",
+			"message": "Invalid JSON format or structure",
+			"details": gin.H{"reason": err.Error()},
+		})
 		return
 	}
 

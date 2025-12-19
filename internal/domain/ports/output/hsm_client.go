@@ -26,4 +26,6 @@ type HSMClient interface {
 
 	//health check
 	HealthCheck(ctx context.Context) error
+
+	Close() error
 }

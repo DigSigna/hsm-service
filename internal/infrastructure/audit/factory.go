@@ -2,24 +2,22 @@ package audit
 
 import (
 	"context"
-	"database/sql"
 	"hsm-service/internal/domain/entities"
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
-	"hsm-service/internal/infrastructure/storage/mysql"
 	"hsm-service/internal/infrastructure/transport/http"
 )
 
 // Factory crea el AuditRecorder basado en la estrategia configurada
 func NewAuditRecorder(
 	strategy valueobjects.AuditStrategy,
-	db *sql.DB,
+	storage output.AuditStorage,
 	httpBaseURL string,
 ) (input.AuditRecorder, error) {
 
 	// Siempre crear storage MySQL (fallback seguro)
-	dbStorage := mysql.NewMySQLAuditStorage(db)
+	dbStorage := storage
 
 	// Crear transporter HTTP si está configurado
 	var httpTransporter output.AuditTransporter

@@ -43,7 +43,7 @@ services:
     environment:
       # Variables de entorno (similar a k8s)
       HSM_ENVIRONMENT: development
-      DATABASE_URL: "digsigna:AVNS_yc_W7Jtf67Yjuy8RvNJ@tcp(bitacoradigital-database-dec-26-backup-do-user-7050795-0.b.db.ondigitalocean.com:25060)/digsigna_mvp?tls=true&timeout=30s&parseTime=true"
+      DATABASE_URL: "digsigna:AVNS_AoW9SVzq5lhLK5YhFzm@tcp(bitacoradigital-database-dec-26-backup-do-user-7050795-0.b.db.ondigitalocean.com:25060)/digsigna?tls=true&timeout=30s&parseTime=true"
       SOFTHSM2_CONF: "/etc/softhsm2.conf"
       HSM_LIBRARY_PATH: "/usr/lib/softhsm/libsofthsm2.so"
       HSM_TOKEN_LABEL: "digsigna-token"

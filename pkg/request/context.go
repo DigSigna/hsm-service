@@ -22,6 +22,7 @@ const (
 	headerXAPIKey       = "X-API-Key"
 
 	duration = "duration_ms"
+	tenantID = "tenant_id"
 )
 
 // ContextValues contiene todos los valores extraídos del request
@@ -33,6 +34,7 @@ type ContextValues struct {
 	RequestID     string
 	Actor         string // API Key o User ID
 	Duration      int64
+	TenantID      string
 }
 
 // Funciones para obtener valores del contexto
@@ -75,6 +77,11 @@ func DurationFromContext(ctx context.Context) int64 {
 	return val
 }
 
+func TenantIDFromContext(ctx context.Context) string {
+	val, _ := ctx.Value(tenantID).(string)
+	return val
+}
+
 func ContextValuesFromContext(ctx context.Context) *ContextValues {
 	return &ContextValues{
 		CorrelationID: GetCorrelationID(ctx),
@@ -84,5 +91,6 @@ func ContextValuesFromContext(ctx context.Context) *ContextValues {
 		RequestID:     RequestIDFromContext(ctx),
 		Actor:         ActorFromContext(ctx),
 		Duration:      DurationFromContext(ctx),
+		TenantID:      TenantIDFromContext(ctx),
 	}
 }

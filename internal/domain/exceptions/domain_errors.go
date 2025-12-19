@@ -22,6 +22,7 @@ const (
 	ErrNotImplemented      ErrorCode = "NOT_IMPLEMENTED"
 	ErrInvalidKeyAlgorithm ErrorCode = "INVALID_KEY_ALGORITHM"
 	ErrTenantNotFound      ErrorCode = "TENANT_NOT_FOUND"
+	ErrInvalidInput        ErrorCode = "INVALID_INPUT"
 )
 
 type DomainError struct {
@@ -47,6 +48,42 @@ func (e *DomainError) WithDetail(key string, value interface{}) *DomainError {
 	return e
 }
 
+// NewFromError crea un DomainError desde un error estándar
+func NewFromError(code ErrorCode, err error) *DomainError {
+	if err == nil {
+		return NewDomainError(code, "")
+	}
+
+	return &DomainError{
+		Code:    code,
+		Message: err.Error(),
+		Details: make(map[string]interface{}),
+	}
+}
+
+// WrapError envuelve un error en un DomainError
+func WrapError(code ErrorCode, message string, err error) *DomainError {
+	de := NewDomainError(code, message)
+	if err != nil {
+		de.Details["original_error"] = err.Error()
+	}
+	return de
+}
+
+// Return ErrorCode
+func GetCode(err error) string {
+	if err == nil {
+		return "SUCCESS"
+	}
+
+	switch v := err.(type) {
+	case *DomainError:
+		return string(v.Code)
+	default:
+		return "UNKNOWN_ERROR"
+	}
+}
+
 // Errores predefinidos
 var (
 	DomainErrInvalidKeyName      = NewDomainError(ErrInvalidKeyName, "The provided key name is invalid")
@@ -66,4 +103,5 @@ var (
 	DomainErrNotImplemented      = NewDomainError(ErrNotImplemented, "This feature is not yet implemented")
 	DomainErrInvalidKeyAlgorithm = NewDomainError(ErrInvalidKeyAlgorithm, "The specified key algorithm is not supported")
 	DomainErrTenantNotFound      = NewDomainError(ErrTenantNotFound, "The specified tenant not found")
+	DomainErrInvalidInput        = NewDomainError(ErrInvalidInput, "The input provided is invalid")
 )
