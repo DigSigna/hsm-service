@@ -1,0 +1,52 @@
+meta {
+  name: all-slots
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/internal/hsm/slots/all
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: All slots
+  
+  request: {
+    url: {{baseUrl}}/internal/hsm/slots/all
+    method: GET
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: bac132cb-a4db-43db-b7e9-2633b0412ec7
+      date: Thu, 22 Jan 2026 20:37:54 GMT
+      content-length: 26
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "all_slots": [
+            77677430,
+            1
+          ]
+        }
+      '''
+    }
+  }
+}

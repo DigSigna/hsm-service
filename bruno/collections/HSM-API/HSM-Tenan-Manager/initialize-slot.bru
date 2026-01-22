@@ -1,0 +1,103 @@
+meta {
+  name: initialize-slot
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/internal/hsm/slots/initialize
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "pin" : "1234"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: New Tenant Slot Initialized
+  
+  request: {
+    url: {{baseUrl}}/internal/hsm/slots/initialize
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "tenant_id": "00000000-0000-0000-0000-000000000002",
+        "pin" : "1234"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 1676007b-6db0-4ffb-a0ed-415907535e7a
+      date: Tue, 13 Jan 2026 23:09:54 GMT
+      content-length: 111
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "Slot initialized successfully",
+          "slot": 244916627,
+          "tenant_id": "00000000-0000-0000-0000-000000000002"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: White-label slot initialiting
+  
+  request: {
+    url: {{baseUrl}}/internal/hsm/slots/initialize
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "pin" : "1234"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 3f684b43-8482-40dd-8ae1-7cc58e30fad0
+      date: Thu, 22 Jan 2026 21:27:01 GMT
+      content-length: 112
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "Slot initialized successfully",
+          "slot": 1775442218,
+          "tenant_id": "30000000-3000-3000-3000-000000000001"
+        }
+      '''
+    }
+  }
+}

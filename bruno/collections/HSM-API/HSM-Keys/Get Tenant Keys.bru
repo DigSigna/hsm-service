@@ -1,0 +1,73 @@
+meta {
+  name: Get Tenant Keys
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/keys/00000000-0000-0000-0000-000000000001
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{dev-tenant-digsina-user-token}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Get Root Public Keys
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys/00000000-0000-0000-0000-000000000001
+    method: GET
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: fc442e1d-bae5-415e-b3a7-f42675ea3e2e
+      date: Thu, 22 Jan 2026 19:44:25 GMT
+      content-length: 985
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        [
+          {
+            "id": "6f3b7dee-8c92-465b-ae33-a65498983f9f",
+            "tenant_id": "00000000-0000-0000-0000-000000000001",
+            "owner_type": "",
+            "owner_id": "",
+            "name": "tenant-root-key-DS-005",
+            "alias": "00000000-0000-0000-0000-000000000001_tenant-root-key-DS-005_f7bdd0d0",
+            "algorithm": "RSA",
+            "key_size": 2048,
+            "purpose": "",
+            "public_key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5IdOFl9nWlerDMp8rZlYWIKEz6LnuNEOTHu7WK4R1RwZqeuPiE6qoKwAPXnFAbUUIJA3HECaNxDSI7uzH4kepF6HJZxxs7psOXUBtE29V7Es/WUZ69HPAnHPQnrQb+WqMR3yK64iiFF8Zvc/HYp/jXVxGBKx2gNClzq/ed356NuEj/XB8nUZojJ6S+lrRUDI4yK1a45ZsnUgdFBNWgWlfItNHUMxtC4yJkcUfgWCL7gly0r+dThQxiKQUoHRrGBsxffb2GRPo+Gkcwv7JsjXZbevhu77CYJhgC0166fI849uweCFzQSwzcfmb/Uq8YHJzXLQyZDJGH1uoG5srn0z2wIDAQAB",
+            "key_handle": "3",
+            "key_label": "00000000-0000-0000-0000-000000000001_tenant-root-key-DS-005_f7bdd0d0",
+            "is_hardware_backed": false,
+            "hsm_slot": 0,
+            "is_active": true,
+            "version": 1,
+            "rotation_date": "0001-01-01T00:00:00Z",
+            "expiration_date": "2027-01-21T00:00:00Z",
+            "created_at": "2026-01-21T22:55:33.90674Z"
+          }
+        ]
+      '''
+    }
+  }
+}

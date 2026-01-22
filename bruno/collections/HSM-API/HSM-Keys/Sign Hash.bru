@@ -1,0 +1,15 @@
+meta {
+  name: Sign Hash
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/keys/sign
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
