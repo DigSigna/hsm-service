@@ -12,7 +12,7 @@ SOURCE = ./cmd/api
 DOCKER_COMPOSE_DEV = docker-compose -f docker-compose.dev.yml
 
 
-.PHONY: sonar-up sonar-down sonar-local test coverage lint quality dev dev-up dev-down dev-logs dev-restart dev-shell test
+.PHONY: sonar-up sonar-down sonar-local test coverage lint quality dev dev-up dev-down dev-logs dev-restart dev-shell test dev-keys dev-jwt dev-restart dev-jwt-export
 
 # SonarQube Local
 sonar-up:
@@ -29,9 +29,9 @@ sonar-local:
 	./scripts/sonar/sonar-Go.sh
 
 # Testing
-test:
-	@echo "Ejecutando tests..."
-	go test -v -race -coverprofile=coverage.out ./...
+# test:
+# 	@echo "Ejecutando tests..."
+# 	go test -v -race -coverprofile=coverage.out ./...
 
 coverage:
 	@echo "Generando cobertura..."
@@ -87,9 +87,9 @@ builder-image:
 # ---------------------------------------------------------
 # Limpieza
 # ---------------------------------------------------------
-cleamn:
-	@echo ">> Limpiando binarios..."
-	rm -rf bin/*
+# clean:
+# 	@echo ">> Limpiando binarios..."
+# 	rm -rf bin/*
 
 
 
@@ -116,6 +116,8 @@ push-ghcr:
 
 # Desarrollo
 dev: dev-up dev-logs
+
+dev-restart: dev-down dev-up dev-logs
 
 dev-up:
 	@echo "Starting development environment..."
@@ -157,3 +159,20 @@ clean:
 	@$(DOCKER_COMPOSE_DEV) down -v
 	@rm -rf ./tmp
 	@docker system prune -f
+
+dev-keys:
+	@echo "Generando claves de desarrollo..."
+	go run scripts/generate-keys/main.go
+	@echo "Claves generadas en certs/"
+	@echo " Asegúrate de que certs/private.pem está en .gitignore"
+
+dev-jwt:
+	@echo "Generando token JWT de desarrollo..."
+	go run scripts/generate-jwt/main.go
+
+dev-jwt-export:
+	go run scripts/generate-jwt/main.go > tokens.txt
+
+# test-jwt:
+# 	@echo "🧪 Probando validación JWT..."
+# 	curl -H "Authorization: Bearer $(shell cat .token.dev)" http://localhost:8080/api/v1/keys
