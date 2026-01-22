@@ -76,7 +76,8 @@ func SetupRouter(deps *RouterDependencies) *gin.Engine {
 
 		// Protected routes
 		protected := api.Group("/")
-		protected.Use(deps.AuthMiddleware.ValidateToken())
+		// protected.Use(deps.AuthMiddleware.ValidateToken())
+		protected.Use(deps.AuthMiddleware.ValidateJWT())
 		{
 			// Key management
 			keys := protected.Group("/keys")
@@ -90,11 +91,16 @@ func SetupRouter(deps *RouterDependencies) *gin.Engine {
 
 	internal := router.Group("/internal")
 	{
-		hsm := internal.Group("/hsm")
+		protected := internal.Group("/")
+		protected.Use(deps.AuthMiddleware.ValidateJWT())
 		{
-			hsm.POST("/slots/initialize", deps.SlotHandler.InitializeSlot)
-			hsm.GET("/slots/available", deps.SlotHandler.GetAvailableSlots)
-			hsm.DELETE("/slots/:slot", deps.SlotHandler.DeleteSlot)
+			hsm := protected.Group("/hsm")
+			{
+				hsm.POST("/slots/initialize", deps.SlotHandler.InitializeSlot)
+				hsm.GET("/slots/available", deps.SlotHandler.GetAvailableSlots)
+				hsm.GET("/slots/all", deps.SlotHandler.GetAllSlots)
+				hsm.DELETE("/slots/:slot", deps.SlotHandler.DeleteSlot)
+			}
 		}
 	}
 

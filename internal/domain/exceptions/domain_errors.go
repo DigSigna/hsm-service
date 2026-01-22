@@ -22,7 +22,12 @@ const (
 	ErrNotImplemented      ErrorCode = "NOT_IMPLEMENTED"
 	ErrInvalidKeyAlgorithm ErrorCode = "INVALID_KEY_ALGORITHM"
 	ErrTenantNotFound      ErrorCode = "TENANT_NOT_FOUND"
+	ErrTenantRequired      ErrorCode = "TENANT_REQUIRED"
 	ErrInvalidInput        ErrorCode = "INVALID_INPUT"
+	ErrOwnerIdRequired     ErrorCode = "OWNER_ID_REQUIRED"
+	ErrInvalidOwnerType    ErrorCode = "INVALID_OWNER_TYPE"
+
+	ErrPKCS11LibraryNotFound ErrorCode = "PKCS11_LIBRARY_NOT_FOUND"
 )
 
 type DomainError struct {
@@ -80,28 +85,34 @@ func GetCode(err error) string {
 	case *DomainError:
 		return string(v.Code)
 	default:
-		return "UNKNOWN_ERROR"
+		// For standard errors, return a generic error code without printing
+		// The actual error message is still captured in the audit log
+		return "INTERNAL_ERROR"
 	}
 }
 
 // Errores predefinidos
 var (
-	DomainErrInvalidKeyName      = NewDomainError(ErrInvalidKeyName, "The provided key name is invalid")
-	DomainErrInvalidAlgorithm    = NewDomainError(ErrInvalidAlgorithm, "The specified algorithm is not supported")
-	DomainErrInvalidKeySize      = NewDomainError(ErrInvalidKeySize, "The specified key size is not supported")
-	DomainErrInvalidTenant       = NewDomainError(ErrInvalidTenant, "The tenant ID is invalid or missing")
-	DomainErrKeyNotFound         = NewDomainError(ErrKeyNotFound, "The requested key was not found")
-	DomainErrKeyInactive         = NewDomainError(ErrKeyInactive, "The requested key is inactive")
-	DomainErrInvalidKeyUsage     = NewDomainError(ErrInvalidKeyUsage, "The key usage is invalid for this operation")
-	DomainErrHSMOperationFailed  = NewDomainError(ErrHSMOperationFailed, "The HSM operation failed")
-	DomainErrInvalidToken        = NewDomainError(ErrInvalidToken, "The provided token is invalid")
-	DomainErrSessionExpired      = NewDomainError(ErrSessionExpired, "The session has expired")
-	DomainErrSessionNotFound     = NewDomainError(ErrSessionNotFound, "The session was not found")
-	DomainErrInvalidAuditAction  = NewDomainError(ErrInvalidAuditAction, "The audit event action is invalid")
-	DomainErrInvalidAuditActor   = NewDomainError(ErrInvalidAuditActor, "The audit event actor is invalid")
-	DomainErrInvalidResourceType = NewDomainError(ErrInvalidResourceType, "The audit event resource type is invalid")
-	DomainErrNotImplemented      = NewDomainError(ErrNotImplemented, "This feature is not yet implemented")
-	DomainErrInvalidKeyAlgorithm = NewDomainError(ErrInvalidKeyAlgorithm, "The specified key algorithm is not supported")
-	DomainErrTenantNotFound      = NewDomainError(ErrTenantNotFound, "The specified tenant not found")
-	DomainErrInvalidInput        = NewDomainError(ErrInvalidInput, "The input provided is invalid")
+	DomainErrInvalidKeyName        = NewDomainError(ErrInvalidKeyName, "The provided key name is invalid")
+	DomainErrInvalidAlgorithm      = NewDomainError(ErrInvalidAlgorithm, "The specified algorithm is not supported")
+	DomainErrInvalidKeySize        = NewDomainError(ErrInvalidKeySize, "The specified key size is not supported")
+	DomainErrInvalidTenant         = NewDomainError(ErrInvalidTenant, "The tenant ID is invalid or missing")
+	DomainErrKeyNotFound           = NewDomainError(ErrKeyNotFound, "The requested key was not found")
+	DomainErrKeyInactive           = NewDomainError(ErrKeyInactive, "The requested key is inactive")
+	DomainErrInvalidKeyUsage       = NewDomainError(ErrInvalidKeyUsage, "The key usage is invalid for this operation")
+	DomainErrHSMOperationFailed    = NewDomainError(ErrHSMOperationFailed, "The HSM operation failed")
+	DomainErrInvalidToken          = NewDomainError(ErrInvalidToken, "The provided token is invalid")
+	DomainErrSessionExpired        = NewDomainError(ErrSessionExpired, "The session has expired")
+	DomainErrSessionNotFound       = NewDomainError(ErrSessionNotFound, "The session was not found")
+	DomainErrInvalidAuditAction    = NewDomainError(ErrInvalidAuditAction, "The audit event action is invalid")
+	DomainErrInvalidAuditActor     = NewDomainError(ErrInvalidAuditActor, "The audit event actor is invalid")
+	DomainErrInvalidResourceType   = NewDomainError(ErrInvalidResourceType, "The audit event resource type is invalid")
+	DomainErrNotImplemented        = NewDomainError(ErrNotImplemented, "This feature is not yet implemented")
+	DomainErrInvalidKeyAlgorithm   = NewDomainError(ErrInvalidKeyAlgorithm, "The specified key algorithm is not supported")
+	DomainErrTenantNotFound        = NewDomainError(ErrTenantNotFound, "The specified tenant not found")
+	DomainErrInvalidInput          = NewDomainError(ErrInvalidInput, "The input provided is invalid")
+	DomainErrTenantRequired        = NewDomainError(ErrTenantRequired, "The tenant required for this operation")
+	DomainErrPKCS11LibraryNotFound = NewDomainError(ErrPKCS11LibraryNotFound, "The PKCS#11 library was not found")
+	DomainErrOwnerIdRequired       = NewDomainError(ErrOwnerIdRequired, "The owner ID is required")
+	DomainErrInvalidOwnerType      = NewDomainError(ErrInvalidOwnerType, "The owner type is invalid")
 )

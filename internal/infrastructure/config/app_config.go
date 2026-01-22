@@ -31,6 +31,7 @@ type HSMConfig struct {
 	TokenLabel     string        `mapstructure:"token_label"`
 	Pin            string        `mapstructure:"pin"`
 	Slot           uint          `mapstructure:"slot"`
+	NoSlots        uint          `mapstructure:"no_slots"`
 	SessionTimeout time.Duration `mapstructure:"session_timeout"`
 	MaxSessions    int           `mapstructure:"max_sessions"`
 }

@@ -7,6 +7,7 @@ import (
 	"hsm-service/internal/application/services"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/internal/interfaces/auth"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -88,18 +89,42 @@ func main() {
 	// Repositories
 	keyStorage := mysql.NewMySQLKeyStorage(db)
 	tenantStorage := mysql.NewMySQLTenantStorage(db)
+	keyOperationStorage := mysql.NewMySQLKeyOperationStorage(db)
 
 	// Application Services
-	keyService := services.NewKeyService(keyStorage, hsmManager, auditDispatcher, tenantStorage)
+	keyService := services.NewKeyService(keyStorage, hsmManager, auditDispatcher, tenantStorage, keyOperationStorage)
 	// call hsm key service if needed
 	// hsmKeyService := services.NewHSMKeyService(hsmManager, keyStorage, auditDispatcher, tenantStorage)
 	signingService := services.NewSigningService(keyStorage, hsmManager, auditDispatcher, tenantStorage)
 	slotService := services.NewSlotService(hsmManager, tenantStorage, auditDispatcher, &cfg.HSM)
+	// Auth setup (JWT validation)
+	authConfig := &auth.Config{
+		Mode:             cfg.Environment, // "development" o "production"
+		PublicKeyPath:    "certs/public.pem",
+		JWKSUrl:          "", // Opcional: para producción con identity service
+		JWKSCacheMinutes: 60,
+	}
+
+	keyManager, err := auth.NewKeyManager(authConfig)
+	if err != nil {
+		log.Fatalf("Failed to create key manager: %v", err)
+	}
+
+	// Usar valores por defecto si no están en la config
+	issuer := "identification-service"
+	audience := "hsm-service"
+	// if cfg.Server.Address != "" {
+	// 	audience = cfg.Server.Address
+	// }
+
+	validator := auth.NewValidator(keyManager, issuer, audience)
+
 	// Handlers
 	keyHandler := handlers.NewKeyHandler(zapLogger, keyService, signingService)
 	slotHandler := handlers.NewSlotHandler(slotService)
+
 	// Middlewares
-	authMiddleware := middlewares.NewAuthMiddleware(zapLogger, nil)
+	authMiddleware := middlewares.NewAuthMiddleware(zapLogger, validator)
 
 	// Router
 	router := routes.SetupRouter(&routes.RouterDependencies{

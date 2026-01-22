@@ -1,6 +1,9 @@
 package request
 
-import "context"
+import (
+	"context"
+	"hsm-service/internal/domain/valueobjects"
+)
 
 // Definir tipos seguros para keys del contexto
 type contextKey string
@@ -14,6 +17,7 @@ const (
 	requestIDKey     contextKey = "request_id"
 	actorKey         contextKey = "actor" // API key, user ID, etc.
 
+	identityContextKey contextKey = "identity_context"
 	// Headers comunes
 	headerXForwardedFor = "X-Forwarded-For"
 	headerXRealIP       = "X-Real-IP"
@@ -35,6 +39,26 @@ type ContextValues struct {
 	Actor         string // API Key o User ID
 	Duration      int64
 	TenantID      string
+}
+
+// WithIdentityContext agrega el identity context al context.Context de Go
+func WithIdentityContext(ctx context.Context, identity *valueobjects.IdentityContext) context.Context {
+	return context.WithValue(ctx, identityContextKey, identity)
+}
+
+// GetIdentityContext extrae el identity context del context.Context
+func GetIdentityContext(ctx context.Context) (*valueobjects.IdentityContext, bool) {
+	identity, ok := ctx.Value(identityContextKey).(*valueobjects.IdentityContext)
+	return identity, ok
+}
+
+// MustGetIdentityContext extrae el identity o panic
+func MustGetIdentityContext(ctx context.Context) *valueobjects.IdentityContext {
+	identity, ok := GetIdentityContext(ctx)
+	if !ok {
+		panic("identity context not found in context")
+	}
+	return identity
 }
 
 // Funciones para obtener valores del contexto

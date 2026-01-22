@@ -150,6 +150,7 @@ func (w *AuditWorker) Close() error {
 func (w *AuditWorker) AuditOperation(
 	ctx context.Context,
 	data valueobjects.AuditData,
+	identityContext *valueobjects.IdentityContext,
 ) {
 	w.mutex.RLock()
 	worker := w.auditClient
@@ -163,26 +164,32 @@ func (w *AuditWorker) AuditOperation(
 
 	// extracting data from map[string]
 
+	if identityContext == nil {
+		identityContext = &valueobjects.IdentityContext{}
+	}
+
 	event := entities.AuditEvent{
-		Timestamp:     time.Now().UTC(),
-		CorrelationID: cxtMetadata.CorrelationID,
-		SessionID:     cxtMetadata.SessionID,
-		RequestID:     cxtMetadata.RequestID,
-		ServiceName:   data.ServiceName,
-		EventType:     data.EventType,
-		EventAction:   data.Operation,
-		TenantID:      cxtMetadata.TenantID,
-		ResourceID:    data.ResourceID,
-		ResourceType:  data.ResourceType,
-		ActorType:     entities.ActorType(data.ActorType),
-		ActorID:       cxtMetadata.Actor,
-		Success:       data.Success,
-		StatusCode:    data.StatusCode,
-		ErrorMessage:  data.ErrMsg,
-		IPAddress:     cxtMetadata.IPAddress,
-		UserAgent:     cxtMetadata.UserAgent,
-		DurationMs:    data.DurationMs,
-		Metadata:      data.Metadata,
+		Timestamp:      time.Now().UTC(),
+		CorrelationID:  cxtMetadata.CorrelationID,
+		SessionID:      cxtMetadata.SessionID,
+		RequestID:      cxtMetadata.RequestID,
+		ServiceName:    data.ServiceName,
+		EventType:      data.EventType,
+		EventAction:    data.Operation,
+		OrganizationID: identityContext.OrganizationID,
+		UserID:         identityContext.UserID,
+		TenantID:       identityContext.TenantID,
+		ResourceID:     data.ResourceID,
+		ResourceType:   data.ResourceType,
+		ActorType:      entities.ActorType(data.ActorType),
+		ActorID:        cxtMetadata.Actor,
+		Success:        data.Success,
+		StatusCode:     data.StatusCode,
+		ErrorMessage:   data.ErrMsg,
+		IPAddress:      cxtMetadata.IPAddress,
+		UserAgent:      cxtMetadata.UserAgent,
+		DurationMs:     data.DurationMs,
+		Metadata:       data.Metadata,
 	}
 
 	// Delegate to worker (non-blocking with internal timeout)

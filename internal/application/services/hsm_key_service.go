@@ -53,7 +53,7 @@ func (s *HSMKeyService) CreateHSMKey(ctx context.Context, label string, algorith
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
@@ -101,7 +101,7 @@ func (s *HSMKeyService) ListHSMKeys(ctx context.Context, tenantID string) (tenan
 			ActorType:   "SERVICE",
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 	// validar tenant
@@ -142,7 +142,7 @@ func (s *HSMKeyService) GetHSMPublicKey(ctx context.Context, keyLabel, tenantID 
 			ActorType:   "SERVICE",
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 	// validar tenant

@@ -33,7 +33,7 @@ func (c *SoftHSMClient) GetPublicKey(ctx context.Context, keyHandle string) (pub
 			Metadata:    nil,
 		}
 		if c.auditDispatcher != nil {
-			c.auditDispatcher.AuditOperation(ctx, data)
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
@@ -79,7 +79,7 @@ func (c *SoftHSMClient) DeleteKey(ctx context.Context, keyHandle string) (err er
 			Metadata:    nil,
 		}
 		if c.auditDispatcher != nil {
-			c.auditDispatcher.AuditOperation(ctx, data)
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
@@ -120,7 +120,7 @@ func (c *SoftHSMClient) ListKeys(ctx context.Context) (keys []*entities.HSMKey, 
 			Metadata:    nil,
 		}
 		if c.auditDispatcher != nil {
-			c.auditDispatcher.AuditOperation(ctx, data)
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 

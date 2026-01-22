@@ -79,7 +79,7 @@ func (s *cryptoService) SignData(ctx context.Context, keyLabel string, data []by
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, auditData)
+			s.auditDispatcher.AuditOperation(ctx, auditData, nil)
 		}
 	}()
 
@@ -133,7 +133,7 @@ func (s *cryptoService) VerifySignature(ctx context.Context, keyLabel string, da
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, auditData)
+			s.auditDispatcher.AuditOperation(ctx, auditData, nil)
 		}
 	}()
 
@@ -187,7 +187,7 @@ func (s *cryptoService) EncryptData(ctx context.Context, keyLabel string, plaint
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
@@ -239,7 +239,7 @@ func (s *cryptoService) DecryptData(ctx context.Context, keyLabel string, cipher
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 	// Obtener la clave HSM
@@ -290,7 +290,7 @@ func (s *cryptoService) SignHash(ctx context.Context, keyLabel string, hash []by
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
@@ -341,7 +341,7 @@ func (s *cryptoService) VerifyHashSignature(ctx context.Context, keyLabel string
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 	// Obtener la clave HSM

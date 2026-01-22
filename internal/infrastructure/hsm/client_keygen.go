@@ -35,7 +35,7 @@ func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobje
 			},
 		}
 		if c.auditDispatcher != nil {
-			c.auditDispatcher.AuditOperation(ctx, data)
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 

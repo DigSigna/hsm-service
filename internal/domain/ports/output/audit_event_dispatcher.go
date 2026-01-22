@@ -20,7 +20,7 @@ type AuditEventDispatcher interface {
 	// AuditOperation envía un evento de auditoría de forma asíncrona
 	// ctx: contexto con metadata (tenant, request ID, etc.)
 	// data: información de la operación a auditar
-	AuditOperation(ctx context.Context, data valueobjects.AuditData)
+	AuditOperation(ctx context.Context, data valueobjects.AuditData, identityContext *valueobjects.IdentityContext)
 
 	// Close cierra el dispatcher y libera recursos
 	Close() error

@@ -38,7 +38,7 @@ func getTenantWithAudit(
 			ActorType:   "SERVICE",
 		}
 		if auditDispatcher != nil {
-			auditDispatcher.AuditOperation(ctx, data)
+			auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 

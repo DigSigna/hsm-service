@@ -3,6 +3,7 @@ package handlers
 import (
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/internal/interfaces/http/dtos/requests"
 	"hsm-service/pkg/logger"
 	"net/http"
 
@@ -23,22 +24,8 @@ func NewKeyHandler(logger *logger.ZapLogger, keyManager input.KeyManager, signer
 	}
 }
 
-type CreateKeyRequest struct {
-	Name      string `json:"name" binding:"required,min=1,max=100"`
-	Algorithm string `json:"algorithm" binding:"required,oneof=RSA ECDSA Ed25519"`
-	KeySize   int    `json:"key_size" binding:"required,min=256,max=4096"`
-	Usage     string `json:"usage" binding:"required,oneof=SIGNING ENCRYPTION"`
-	TenantID  string `json:"tenant_id" binding:"required,uuid"`
-}
-
-type SignHashRequest struct {
-	KeyID    string `json:"key_id" binding:"required,uuid"`
-	Hash     string `json:"hash" binding:"required,base64"`
-	TenantID string `json:"tenant_id" binding:"required,uuid"`
-}
-
 func (h *KeyHandler) CreateKey(c *gin.Context) {
-	var req CreateKeyRequest
+	var req requests.CreateKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "INVALID_REQUEST",
@@ -48,15 +35,24 @@ func (h *KeyHandler) CreateKey(c *gin.Context) {
 		return
 	}
 
+	identityVal, exists := c.Get("identity_context")
+	if !exists {
+		c.JSON(401, gin.H{"error": "identity not found"})
+		return
+	}
+
+	identity := identityVal.(*valueobjects.IdentityContext)
+
 	key, err := h.keyManager.CreateKey(
 		c.Request.Context(),
 		req.Name,
 		valueobjects.KeyAlgorithm(req.Algorithm),
 		req.KeySize,
 		valueobjects.KeyUsage(req.Usage),
-		req.TenantID,
+		identity,
 	)
 	if err != nil {
+		println("ERROR CREATING KEY:", err.Error())
 		h.HandleError(c, err)
 		return
 	}
@@ -66,7 +62,7 @@ func (h *KeyHandler) CreateKey(c *gin.Context) {
 		"name":       key.Name,
 		"algorithm":  key.Algorithm,
 		"key_size":   key.KeySize,
-		"usage":      key.Usage,
+		"usage":      key.Purpose,
 		"tenant_id":  key.TenantID,
 		"created_at": key.CreatedAt,
 		"is_active":  key.IsActive,
@@ -90,7 +86,7 @@ func (h *KeyHandler) ListKeys(c *gin.Context) {
 }
 
 func (h *KeyHandler) SignHash(c *gin.Context) {
-	var req SignHashRequest
+	var req requests.SignHashRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

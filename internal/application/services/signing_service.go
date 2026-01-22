@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hsm-service/internal/domain/exceptions"
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
@@ -51,7 +52,7 @@ func (s *signingService) SignHash(ctx context.Context, keyID string, hash []byte
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 	// Validar que la clave existe y pertenece al tenant
@@ -64,7 +65,7 @@ func (s *signingService) SignHash(ctx context.Context, keyID string, hash []byte
 		return nil, errors.New(string(exceptions.ErrKeyInactive))
 	}
 
-	if key.Usage != valueobjects.KeyUsageSigning && key.Usage != valueobjects.KeyUsageBoth {
+	if key.Purpose != valueobjects.KeyUsageSigning && key.Purpose != valueobjects.KeyUsageBoth {
 		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 
@@ -80,7 +81,7 @@ func (s *signingService) SignHash(ctx context.Context, keyID string, hash []byte
 	// Firmar el hash usando el HSM
 	signature, err = s.hsmManager.SignHash(ctx, key.KeyHandle, hash, tenant.HSMSlot)
 	if err != nil {
-		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=sign_hash")
+		return nil, fmt.Errorf("failed to sign hash with key %s in slot %d: %w", keyID, tenant.HSMSlot, err)
 	}
 
 	return signature, nil
@@ -103,7 +104,7 @@ func (s *signingService) GetPublicKey(ctx context.Context, keyID, tenantID strin
 			},
 		}
 		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data)
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 

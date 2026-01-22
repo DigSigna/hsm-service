@@ -17,11 +17,15 @@ const (
 type CryptographicKey struct {
 	ID               string                    `json:"id"`
 	TenantID         string                    `json:"tenant_id"`
+	OwnerType        valueobjects.OwnerType    `json:"owner_type"`
+	OwnerID          string                    `json:"owner_id"`
+	ParentKeyID      *string                   `json:"parent_key_id,omitempty"`
+	CertLevel        int                       `json:"cert_level,omitempty"`
 	Name             string                    `json:"name"`
 	Alias            string                    `json:"alias"`
 	Algorithm        valueobjects.KeyAlgorithm `json:"algorithm"`
 	KeySize          int                       `json:"key_size"`
-	Usage            valueobjects.KeyUsage     `json:"usage"`
+	Purpose          valueobjects.KeyUsage     `json:"purpose"`
 	PublicKey        []byte                    `json:"public_key"`
 	KeyHandle        string                    `json:"key_handle"`
 	KeyLabel         string                    `json:"key_label"`
@@ -48,7 +52,7 @@ func (k *CryptographicKey) Validate() error {
 	if k.TenantID == "" {
 		return errors.New(string(exceptions.ErrInvalidTenant))
 	}
-	if !k.Usage.IsValid() {
+	if !k.Purpose.IsValid() {
 		return errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 	return nil

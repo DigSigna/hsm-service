@@ -21,7 +21,7 @@ func NewMockAuditDispatcher() *MockAuditDispatcher {
 	}
 }
 
-func (m *MockAuditDispatcher) AuditOperation(ctx context.Context, data valueobjects.AuditData) {
+func (m *MockAuditDispatcher) AuditOperation(ctx context.Context, data valueobjects.AuditData, identityContext *valueobjects.IdentityContext) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.Events = append(m.Events, data)

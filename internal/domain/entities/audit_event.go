@@ -24,9 +24,11 @@ type AuditEvent struct {
 	EventType   string `json:"event_type" db:"event_type"`
 	EventAction string `json:"event_action" db:"event_action"`
 
-	TenantID     string `json:"tenant_id,omitempty" db:"tenant_id"`
-	ResourceID   string `json:"resource_id,omitempty" db:"resource_id"`
-	ResourceType string `json:"resource_type,omitempty" db:"resource_type"`
+	OrganizationID *string `json:"organization_id,omitempty" db:"organization_id"`
+	UserID         string  `json:"user_id,omitempty" db:"user_id"`
+	TenantID       string  `json:"tenant_id,omitempty" db:"tenant_id"`
+	ResourceID     string  `json:"resource_id,omitempty" db:"resource_id"`
+	ResourceType   string  `json:"resource_type,omitempty" db:"resource_type"`
 
 	ActorType ActorType `json:"actor_type" db:"actor_type"`
 	ActorID   string    `json:"actor_id" db:"actor_id"`

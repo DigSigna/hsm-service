@@ -33,6 +33,7 @@ func (r *MySQLAuditStorage) Store(ctx context.Context, event *entities.AuditEven
 			event_action,
 			
 			tenant_id,
+			organization_id,
 			user_id,
 			resource_id,
 			resource_type,
@@ -50,7 +51,7 @@ func (r *MySQLAuditStorage) Store(ctx context.Context, event *entities.AuditEven
 			
 			metadata
 		)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `
 	metadataJSON, errj := json.Marshal(event.Metadata)
 	if errj != nil {
@@ -67,7 +68,8 @@ func (r *MySQLAuditStorage) Store(ctx context.Context, event *entities.AuditEven
 		event.EventAction,
 
 		event.TenantID,
-		nil,
+		event.OrganizationID,
+		event.UserID,
 		event.ResourceID,
 		event.ResourceType,
 

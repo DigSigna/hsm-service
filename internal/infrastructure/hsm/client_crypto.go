@@ -30,13 +30,13 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 			},
 		}
 		if c.auditDispatcher != nil {
-			c.auditDispatcher.AuditOperation(ctx, data)
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
 		}
 	}()
 
 	handle, err := parseKeyHandle(keyHandle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid key handle '%s': %w", keyHandle, err)
 	}
 
 	c.mutex.RLock()
@@ -46,11 +46,19 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 		return nil, errors.New(hsmClosedMsg)
 	}
 
+	// Verificar que la clave existe
+	_, err = c.ctx.GetAttributeValue(c.session, handle, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, nil),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("key with handle '%s' not found in HSM: %w", keyHandle, err)
+	}
+
 	// Determine mechanism based on key type
 	mechanism := pkcs11.NewMechanism(pkcs11.CKM_SHA256_RSA_PKCS, nil)
 
 	if err := c.ctx.SignInit(c.session, []*pkcs11.Mechanism{mechanism}, handle); err != nil {
-		return nil, fmt.Errorf("failed to initialize signing: %w", err)
+		return nil, fmt.Errorf("failed to initialize signing operation: %w", err)
 	}
 
 	signature, err := c.ctx.Sign(c.session, hash)

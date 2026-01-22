@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"hsm-service/internal/domain/ports/input"
+	"hsm-service/internal/domain/valueobjects"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,9 +18,7 @@ func NewSlotHandler(slotManager input.SlotManager) *SlotHandler {
 }
 
 type InitializeSlotRequest struct {
-	Slot     uint   `json:"slot" binding:"required"`
-	TenantID string `json:"tenant_id" binding:"required"`
-	Pin      string `json:"pin" binding:"required,min=4"`
+	Pin string `json:"pin" binding:"required,min=4"`
 }
 
 // InitializeSlot godoc
@@ -37,15 +36,24 @@ func (h *SlotHandler) InitializeSlot(c *gin.Context) {
 		return
 	}
 
-	if err := h.slotManager.InitializeSlot(c.Request.Context(), req.Slot, req.TenantID, req.Pin); err != nil {
+	identityVal, exists := c.Get("identity_context")
+	if !exists {
+		c.JSON(401, gin.H{"error": "identity not found"})
+		return
+	}
+
+	identity := identityVal.(*valueobjects.IdentityContext)
+
+	slot, err := h.slotManager.InitializeSlot(c.Request.Context(), req.Pin, identity)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Slot initialized successfully",
-		"slot":      req.Slot,
-		"tenant_id": req.TenantID,
+		"slot":      slot,
+		"tenant_id": identity.TenantID,
 	})
 }
 
@@ -57,6 +65,16 @@ func (h *SlotHandler) GetAvailableSlots(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"available_slots": slots})
+}
+
+func (h *SlotHandler) GetAllSlots(c *gin.Context) {
+	slots, err := h.slotManager.GetAllSlots(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"all_slots": slots})
 }
 
 func (h *SlotHandler) DeleteSlot(c *gin.Context) {

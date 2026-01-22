@@ -108,7 +108,7 @@ func (c *SoftHSMClient) HealthCheck(ctx context.Context) error {
 	}
 
 	if c.auditDispatcher != nil {
-		c.auditDispatcher.AuditOperation(ctx, data)
+		c.auditDispatcher.AuditOperation(ctx, data, nil)
 	}
 
 	return err
