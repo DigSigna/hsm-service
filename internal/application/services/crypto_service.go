@@ -9,7 +9,12 @@ import (
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/pkg/helpers"
 	"time"
+)
+
+const (
+	slotErrorMsg = "error checking slot existence"
 )
 
 type cryptoService struct {
@@ -17,29 +22,50 @@ type cryptoService struct {
 	keyRepo         output.KeyRepository
 	tenantRepo      output.TenantRepository
 	auditDispatcher output.AuditEventDispatcher
+	slotRepo        output.SlotRepository
 }
 
 var _ input.CryptoService = (*cryptoService)(nil)
+
+// cryptoOperationContext holds information for crypto operations
+type cryptoOperationContext struct {
+	keyLabel  string
+	tenantID  string
+	operation string
+	start     time.Time
+}
 
 func NewCryptoService(
 	hsmManager output.HSMManager,
 	keyRepo output.KeyRepository,
 	tenantRepo output.TenantRepository,
 	auditDispatcher output.AuditEventDispatcher,
+	slotRepo output.SlotRepository,
 ) input.CryptoService {
 	return &cryptoService{
 		hsmManager:      hsmManager,
 		keyRepo:         keyRepo,
 		tenantRepo:      tenantRepo,
 		auditDispatcher: auditDispatcher,
+		slotRepo:        slotRepo,
 	}
 }
 
-// Método auxiliar para obtener clave HSM por label y tenant
-func (s *cryptoService) getHSMKeyByLabel(ctx context.Context, label, tenantID string) (*entities.HSMKey, error) {
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
+// validateKeyUsageForOperation validates that a key can be used for a specific operation
+func (s *cryptoService) validateKeyUsageForOperation(
+	hsmKey *entities.HSMKey,
+	requiredUsage valueobjects.KeyUsage) error {
 
+	if hsmKey.Usage != requiredUsage && hsmKey.Usage != valueobjects.KeyUsageBoth {
+		return errors.New(string(exceptions.ErrInvalidKeyUsage))
+	}
+	return nil
+}
+
+// getSlotForTenant retrieves the HSM slot for a given tenant
+func (s *cryptoService) getSlotForTenant(ctx context.Context, tenantID string) (*entities.HSMSlot, error) {
+	// Validate tenant
+	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
 	if err != nil {
 		return nil, exceptions.NewDomainError(
 			exceptions.ErrTenantNotFound,
@@ -47,8 +73,51 @@ func (s *cryptoService) getHSMKeyByLabel(ctx context.Context, label, tenantID st
 		).WithDetail("original_error", err.Error())
 	}
 
-	// Listar todas las claves y filtrar por tenant y label
-	allKeys, err := s.hsmManager.ListKeys(ctx, tenant.HSMSlot)
+	// Get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			slotErrorMsg,
+		).WithDetail("original_error", err.Error())
+	}
+
+	return slot, nil
+}
+
+// auditCryptoOperation performs audit logging for crypto operations
+func (s *cryptoService) auditCryptoOperation(
+	ctx context.Context,
+	err *error,
+	opCtx *cryptoOperationContext) {
+
+	data := valueobjects.AuditData{
+		ServiceName: CryptoServiceName,
+		EventType:   "HSM_OPERATION",
+		Operation:   opCtx.operation,
+		Success:     *err == nil,
+		ErrMsg:      helpers.ErrToString(*err),
+		StatusCode:  exceptions.GetCode(*err),
+		ActorType:   "SERVICE",
+		DurationMs:  time.Since(opCtx.start).Milliseconds(),
+		Metadata: map[string]interface{}{
+			"label": opCtx.keyLabel,
+		},
+	}
+	if s.auditDispatcher != nil {
+		s.auditDispatcher.AuditOperation(ctx, data, nil)
+	}
+}
+
+// Método auxiliar para obtener clave HSM por label y tenant
+func (s *cryptoService) getHSMKeyByLabel(ctx context.Context, label, tenantID string) (*entities.HSMKey, error) {
+	slot, err := s.getSlotForTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// List all keys and filter by tenant and label
+	allKeys, err := s.hsmManager.ListKeys(ctx, int(slot.SlotNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -61,53 +130,48 @@ func (s *cryptoService) getHSMKeyByLabel(ctx context.Context, label, tenantID st
 	return nil, errors.New(string(exceptions.ErrKeyNotFound))
 }
 
-func (s *cryptoService) SignData(ctx context.Context, keyLabel string, data []byte, tenantID string) (signature []byte, err error) {
-	start := time.Now()
-	defer func() {
+func (s *cryptoService) SignData(
+	ctx context.Context,
+	keyLabel string,
+	data []byte,
+	tenantID string,
+	identityContext *valueobjects.IdentityContext,
+) (signature []byte, err error) {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "SIGN_DATA",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		auditData := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "SIGN_DATA",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, auditData, nil)
-		}
-	}()
-
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validar que la clave puede firmar
-	if hsmKey.Usage != valueobjects.KeyUsageSigning && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageSigning); err != nil {
+		return nil, err
 	}
 
-	// Hashear datos
+	// Hash data
 	hash := sha256.Sum256(data)
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return nil, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return nil, err
 	}
-	// Firmar el hash usando HSM
-	signature, err = s.hsmManager.SignHash(ctx, hsmKey.KeyHandle, hash[:], tenant.HSMSlot)
+
+	// Sign hash using HSM
+	signature, err = s.hsmManager.SignHash(
+		ctx,
+		hsmKey.KeyHandle,
+		hash[:],
+		int(slot.SlotNumber),
+		identityContext,
+	)
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=sign_data")
 	}
@@ -116,52 +180,35 @@ func (s *cryptoService) SignData(ctx context.Context, keyLabel string, data []by
 }
 
 func (s *cryptoService) VerifySignature(ctx context.Context, keyLabel string, data, signature []byte, tenantID string) (valid bool, err error) {
-	start := time.Now()
-	defer func() {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "VERIFY_SIGNATURE",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		auditData := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "VERIFY_SIGNATURE",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, auditData, nil)
-		}
-	}()
-
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return false, err
 	}
 
-	// Validar que la clave puede verificar
-	if hsmKey.Usage != valueobjects.KeyUsageSigning && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return false, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageSigning); err != nil {
+		return false, err
 	}
 
-	// Hashear datos
+	// Hash data
 	hash := sha256.Sum256(data)
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return false, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return false, err
 	}
-	// Verificar firma usando HSM
-	valid, err = s.hsmManager.VerifySignature(ctx, hsmKey.KeyHandle, hash[:], signature, tenant.HSMSlot)
+
+	// Verify signature using HSM
+	valid, err = s.hsmManager.VerifySignature(ctx, hsmKey.KeyHandle, hash[:], signature, int(slot.SlotNumber))
 	if err != nil {
 		return false, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=verify_signature")
 	}
@@ -170,50 +217,32 @@ func (s *cryptoService) VerifySignature(ctx context.Context, keyLabel string, da
 }
 
 func (s *cryptoService) EncryptData(ctx context.Context, keyLabel string, plaintext []byte, tenantID string) (ciphertext []byte, err error) {
-	start := time.Now()
-	defer func() {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "ENCRYPT_DATA",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		data := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "ENCRYPT_DATA",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data, nil)
-		}
-	}()
-
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validar que la clave puede encriptar
-	if hsmKey.Usage != valueobjects.KeyUsageEncryption && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageEncryption); err != nil {
+		return nil, err
 	}
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return nil, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return nil, err
 	}
 
-	// Encriptar datos usando HSM
-	ciphertext, err = s.hsmManager.Encrypt(ctx, hsmKey.KeyHandle, plaintext, tenant.HSMSlot)
+	// Encrypt data using HSM
+	ciphertext, err = s.hsmManager.Encrypt(ctx, hsmKey.KeyHandle, plaintext, int(slot.SlotNumber))
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=encrypt")
 	}
@@ -222,49 +251,32 @@ func (s *cryptoService) EncryptData(ctx context.Context, keyLabel string, plaint
 }
 
 func (s *cryptoService) DecryptData(ctx context.Context, keyLabel string, ciphertext []byte, tenantID string) (plaintext []byte, err error) {
-	start := time.Now()
-	defer func() {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "DECRYPT_DATA",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		data := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "DECRYPT_DATA",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data, nil)
-		}
-	}()
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validar que la clave puede desencriptar
-	if hsmKey.Usage != valueobjects.KeyUsageEncryption && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageEncryption); err != nil {
+		return nil, err
 	}
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return nil, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return nil, err
 	}
 
-	// Desencriptar datos usando HSM
-	plaintext, err = s.hsmManager.Decrypt(ctx, hsmKey.KeyHandle, ciphertext, tenant.HSMSlot)
+	// Decrypt data using HSM
+	plaintext, err = s.hsmManager.Decrypt(ctx, hsmKey.KeyHandle, ciphertext, int(slot.SlotNumber))
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=decrypt")
 	}
@@ -272,50 +284,45 @@ func (s *cryptoService) DecryptData(ctx context.Context, keyLabel string, cipher
 	return plaintext, nil
 }
 
-func (s *cryptoService) SignHash(ctx context.Context, keyLabel string, hash []byte, tenantID string) (signature []byte, err error) {
-	start := time.Now()
-	defer func() {
+func (s *cryptoService) SignHash(
+	ctx context.Context,
+	keyLabel string,
+	hash []byte,
+	tenantID string,
+	identityContext *valueobjects.IdentityContext,
+) (signature []byte, err error) {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "SIGN_HASH",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		data := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "SIGN_HASH",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data, nil)
-		}
-	}()
-
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validar que la clave puede firmar
-	if hsmKey.Usage != valueobjects.KeyUsageSigning && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageSigning); err != nil {
+		return nil, err
 	}
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return nil, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return nil, err
 	}
-	// Firmar el hash directamente usando HSM
-	signature, err = s.hsmManager.SignHash(ctx, hsmKey.KeyHandle, hash, tenant.HSMSlot)
+
+	// Sign hash directly using HSM
+	signature, err = s.hsmManager.SignHash(
+		ctx,
+		hsmKey.KeyHandle,
+		hash,
+		int(slot.SlotNumber),
+		identityContext,
+	)
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=sign_hash")
 	}
@@ -324,48 +331,32 @@ func (s *cryptoService) SignHash(ctx context.Context, keyLabel string, hash []by
 }
 
 func (s *cryptoService) VerifyHashSignature(ctx context.Context, keyLabel string, hash, signature []byte, tenantID string) (valid bool, err error) {
-	start := time.Now()
-	defer func() {
+	opCtx := &cryptoOperationContext{
+		keyLabel:  keyLabel,
+		tenantID:  tenantID,
+		operation: "VERIFY_HASH_SIGNATURE",
+		start:     time.Now(),
+	}
+	defer s.auditCryptoOperation(ctx, &err, opCtx)
 
-		data := valueobjects.AuditData{
-			ServiceName: CryptoServiceName,
-			EventType:   "HSM_OPERATION",
-			Operation:   "VERIFY_HASH_SIGNATURE",
-			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
-			StatusCode:  exceptions.GetCode(err),
-			ActorType:   "SERVICE",
-			DurationMs:  time.Since(start).Milliseconds(),
-			Metadata: map[string]interface{}{
-				"label": keyLabel,
-			},
-		}
-		if s.auditDispatcher != nil {
-			s.auditDispatcher.AuditOperation(ctx, data, nil)
-		}
-	}()
-	// Obtener la clave HSM
+	// Get HSM key and validate usage
 	hsmKey, err := s.getHSMKeyByLabel(ctx, keyLabel, tenantID)
 	if err != nil {
 		return false, err
 	}
 
-	// Validar que la clave puede verificar
-	if hsmKey.Usage != valueobjects.KeyUsageSigning && hsmKey.Usage != valueobjects.KeyUsageBoth {
-		return false, errors.New(string(exceptions.ErrInvalidKeyUsage))
+	if err := s.validateKeyUsageForOperation(hsmKey, valueobjects.KeyUsageSigning); err != nil {
+		return false, err
 	}
 
-	// validar tenant
-	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
-
+	// Get slot
+	slot, err := s.getSlotForTenant(ctx, tenantID)
 	if err != nil {
-		return false, exceptions.NewDomainError(
-			exceptions.ErrTenantNotFound,
-			tenantErrorMsg,
-		).WithDetail("original_error", err.Error())
+		return false, err
 	}
-	// Verificar firma del hash usando HSM
-	valid, err = s.hsmManager.VerifySignature(ctx, hsmKey.KeyHandle, hash, signature, tenant.HSMSlot)
+
+	// Verify hash signature using HSM
+	valid, err = s.hsmManager.VerifySignature(ctx, hsmKey.KeyHandle, hash, signature, int(slot.SlotNumber))
 	if err != nil {
 		return false, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=verify_hash_signature")
 	}
