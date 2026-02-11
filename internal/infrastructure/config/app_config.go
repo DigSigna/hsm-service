@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Environment string
-	Database    DatabaseConfig
-	Server      ServerConfig
-	HSM         HSMConfig
-	Redis       RedisConfig
-	Audit       AuditConfig
+	Environment   string
+	Database      DatabaseConfig
+	Server        ServerConfig
+	HSM           HSMConfig
+	Redis         RedisConfig
+	Audit         AuditConfig
+	AESKeyManager AESKeyManager
 }
 
 type DatabaseConfig struct {
@@ -31,6 +32,7 @@ type HSMConfig struct {
 	TokenLabel     string        `mapstructure:"token_label"`
 	Pin            string        `mapstructure:"pin"`
 	Slot           uint          `mapstructure:"slot"`
+	NoSlots        uint          `mapstructure:"no_slots"`
 	SessionTimeout time.Duration `mapstructure:"session_timeout"`
 	MaxSessions    int           `mapstructure:"max_sessions"`
 }
@@ -43,12 +45,67 @@ type RedisConfig struct {
 }
 
 type AuditConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	BaseURL string `mapstructure:"base_url"`
+	Enabled  bool                  `mapstructure:"enabled"`
+	Strategy string                `mapstructure:"strategy"`
+	HTTP     AuditHTTPClientConfig `mapstructure:"http"`
+	Hybrid   AuditHybridConfig     `mapstructure:"hybrid"`
+}
+
+type AuditStrategy string
+
+const (
+	StrategyDatabase AuditStrategy = "database"
+	StrategyHTTP     AuditStrategy = "http"
+	StrategyHybrid   AuditStrategy = "hybrid"
+	StrategyMock     AuditStrategy = "mock"
+	StrategyAsync    AuditStrategy = "async"
+)
+
+type AuditHTTPClientConfig struct {
+	Timeout time.Duration `mapstructure:"timeout"`
+	BaseURL string        `mapstructure:"base_url"`
+}
+
+type AuditHybridConfig struct {
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+}
+
+type CircuitBreakerConfig struct {
+	MaxFailures  int           `mapstructure:"max_failures"`
+	ResetTimeout time.Duration `mapstructure:"reset_timeout"`
+}
+
+type AESKeyManager struct {
+	Strategy string      `mapstructure:"strategy"`
+	Local    LocalConfig `mapstructure:"local"`
+	K8S      K8SConfig   `mapstructure:"k8s"`
+	Vault    VaultConfig `mapstructure:"vault"`
+}
+
+type LocalConfig struct {
+	MasterKey string `mapstructure:"master_key"`
+	KeyID     string `mapstructure:"key_id"`
+}
+type K8SConfig struct {
+	SecretName      string `mapstructure:"secret_name"`
+	SecretNamespace string `mapstructure:"secret_namespace"`
+	KeyID           string `mapstructure:"key_id"`
+	MasterKeyKey    string `mapstructure:"master_key_key"`
+	OldMasterKeyKey string `mapstructure:"old_master_key_key"`
+	KubeconfigPath  string `mapstructure:"kubeconfig_path"`
+	InCluster       bool   `mapstructure:"in_cluster"`
+}
+
+type VaultConfig struct {
+	Address    string `mapstructure:"address"`
+	Token      string `mapstructure:"token"`
+	SecretPath string `mapstructure:"secret_path"`
+	Path       string `mapstructure:"path"`
+	KeyName    string `mapstructure:"key_name"`
 }
 
 func (c *Config) IsAuditEnabled() bool {
-	return c.Audit.Enabled && c.Audit.BaseURL != ""
+	return c.Audit.Enabled
 }
 
 func LoadConfig() *Config {
@@ -111,6 +168,7 @@ func setDefaults() {
 	viper.SetDefault("hsm.token_label", "digsigna-token")
 	viper.SetDefault("hsm.pin", "1234")
 	viper.SetDefault("hsm.slot", 0)
+	viper.SetDefault("hsm.no_slots", 4)
 	viper.SetDefault("hsm.session_timeout", "30s")
 	viper.SetDefault("hsm.max_sessions", 10)
 
@@ -122,5 +180,14 @@ func setDefaults() {
 
 	// Audit
 	viper.SetDefault("audit.enabled", true)
-	viper.SetDefault("audit.base_url", "http://audit-service:8080")
+	viper.SetDefault("audit.strategy", "hybrid")
+	viper.SetDefault("audit.http.base_url", "http://audit-service:8080")
+	viper.SetDefault("audit.http.timeout", "5s")
+	viper.SetDefault("audit.hybrid.circuit_breaker.max_failures", 5)
+	viper.SetDefault("audit.hybrid.circuit_breaker.reset_timeout", "30s")
+
+	// AES Key Manager
+	viper.SetDefault("aeskeymanager.strategy", "local")
+	viper.SetDefault("aeskeymanager.local.master_key", "LLvxgXPJCEY1sek2eTNihV7laqAIVdQVxz11eYcA8oU=") // "mock_master_key_for_development" en base64
+	viper.SetDefault("aeskeymanager.local.key_id", "master-aes-key-v1")
 }

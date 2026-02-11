@@ -39,7 +39,7 @@ func (s *authService) ValidateToken(ctx context.Context, token string) (*entitie
 	return session, nil
 }
 
-func (s *authService) CreateSession(ctx context.Context, userID, tenantID string, permissions []string) (*entities.Session, string, error) {
+func (s *authService) CreateSession(ctx context.Context, userID, tenantID string, permissions map[string]interface{}) (*entities.Session, string, error) {
 	session := &entities.Session{
 		ID:          uuid.New().String(),
 		UserID:      userID,

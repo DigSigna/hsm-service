@@ -15,18 +15,28 @@ const (
 )
 
 type CryptographicKey struct {
-	ID        string                    `json:"id"`
-	Name      string                    `json:"name"`
-	Algorithm valueobjects.KeyAlgorithm `json:"algorithm"`
-	KeySize   int                       `json:"key_size"`
-	Usage     valueobjects.KeyUsage     `json:"usage"`
-	PublicKey []byte                    `json:"public_key"`
-	KeyHandle string                    `json:"key_handle"`
-	TenantID  string                    `json:"tenant_id"`
-	Version   int                       `json:"version"`
-	CreatedAt time.Time                 `json:"created_at"`
-	IsActive  bool                      `json:"is_active"`
-	Metadata  map[string]string         `json:"metadata,omitempty"`
+	ID               string                    `json:"id"`
+	TenantID         string                    `json:"tenant_id"`
+	OwnerType        valueobjects.OwnerType    `json:"owner_type"`
+	OwnerID          string                    `json:"owner_id"`
+	ParentKeyID      *string                   `json:"parent_key_id,omitempty"`
+	CertLevel        int                       `json:"cert_level,omitempty"`
+	Name             string                    `json:"name"`
+	Alias            string                    `json:"alias"`
+	Algorithm        valueobjects.KeyAlgorithm `json:"algorithm"`
+	KeySize          int                       `json:"key_size"`
+	Purpose          valueobjects.KeyUsage     `json:"purpose"`
+	PublicKey        []byte                    `json:"public_key"`
+	KeyHandle        string                    `json:"key_handle"`
+	KeyLabel         string                    `json:"key_label"`
+	IsHardwareBacked bool                      `json:"is_hardware_backed"`
+	HSMSlotID        string                    `json:"hsm_slot_id"`
+	IsActive         bool                      `json:"is_active"`
+	Version          int                       `json:"version"`
+	RotationDate     time.Time                 `json:"rotation_date,omitempty"`
+	ExpirationDate   time.Time                 `json:"expiration_date,omitempty"`
+	CreatedAt        time.Time                 `json:"created_at"`
+	Metadata         map[string]string         `json:"metadata,omitempty"`
 }
 
 func (k *CryptographicKey) Validate() error {
@@ -42,7 +52,7 @@ func (k *CryptographicKey) Validate() error {
 	if k.TenantID == "" {
 		return errors.New(string(exceptions.ErrInvalidTenant))
 	}
-	if !k.Usage.IsValid() {
+	if !k.Purpose.IsValid() {
 		return errors.New(string(exceptions.ErrInvalidKeyUsage))
 	}
 	return nil

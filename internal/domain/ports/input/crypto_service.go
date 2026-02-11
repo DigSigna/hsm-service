@@ -2,11 +2,18 @@ package input
 
 import (
 	"context"
+	"hsm-service/internal/domain/valueobjects"
 )
 
 type CryptoService interface {
 	// Firma y Verificación
-	SignData(ctx context.Context, keyLabel string, data []byte, tenantID string) ([]byte, error)
+	SignData(
+		ctx context.Context,
+		keyLabel string,
+		data []byte,
+		tenantID string,
+		identityContext *valueobjects.IdentityContext,
+	) ([]byte, error)
 	VerifySignature(ctx context.Context, keyLabel string, data, signature []byte, tenantID string) (bool, error)
 
 	// Encriptación/Desencriptación
@@ -14,6 +21,12 @@ type CryptoService interface {
 	DecryptData(ctx context.Context, keyLabel string, ciphertext []byte, tenantID string) ([]byte, error)
 
 	// Operaciones con Hash
-	SignHash(ctx context.Context, keyLabel string, hash []byte, tenantID string) ([]byte, error)
+	SignHash(
+		ctx context.Context,
+		keyLabel string,
+		hash []byte,
+		tenantID string,
+		identityContext *valueobjects.IdentityContext,
+	) ([]byte, error)
 	VerifyHashSignature(ctx context.Context, keyLabel string, hash, signature []byte, tenantID string) (bool, error)
 }

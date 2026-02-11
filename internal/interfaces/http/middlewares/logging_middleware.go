@@ -14,9 +14,9 @@ func LoggingMiddleware(logger logger.Logger) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
 
-		c.Next()
-
 		duration := time.Since(start)
+		c.Set("duration_ms", duration)
+		c.Next()
 
 		logger.Info("HTTP Request",
 			zap.Int("status", c.Writer.Status()),

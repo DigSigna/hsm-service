@@ -9,157 +9,95 @@ import (
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
-	"hsm-service/pkg/request"
-	"log"
+	"hsm-service/pkg/helpers"
+
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type keyService struct {
-	keyRepo   output.KeyRepository
-	hsmClient output.HSMClient
-	// auditClient output.AuditClient implementation that logs to audit-service
-	auditClient input.AuditRecorder
-	tenantRepo  output.TenantRepository
+	keyRepo          output.KeyRepository
+	hsmManager       output.HSMManager
+	auditDispatcher  output.AuditEventDispatcher
+	tenantRepo       output.TenantRepository
+	keyOperationRepo output.KeyOperationRepository
+	slotRepo         output.SlotRepository
 }
+
+type contextKey string
+
+const (
+	tenantIDKey contextKey = "tenant_id"
+)
 
 var _ input.KeyManager = (*keyService)(nil)
 
+// keyCreationContext holds information needed during key creation
+type keyCreationContext struct {
+	name            string
+	algorithm       valueobjects.KeyAlgorithm
+	size            int
+	usage           valueobjects.KeyUsage
+	identityContext *valueobjects.IdentityContext
+	start           time.Time
+}
+
 func NewKeyService(
 	keyRepo output.KeyRepository,
-	hsmClient output.HSMClient,
-	// auditClient output.AuditClient,
-	auditClient input.AuditRecorder,
+	hsmManager output.HSMManager,
+	auditDispatcher output.AuditEventDispatcher,
 	tenantRepo output.TenantRepository,
+	keyOperationRepo output.KeyOperationRepository,
+	slotRepo output.SlotRepository,
 ) input.KeyManager {
 	return &keyService{
-		keyRepo:     keyRepo,
-		hsmClient:   hsmClient,
-		auditClient: auditClient,
-		tenantRepo:  tenantRepo,
+		keyRepo:          keyRepo,
+		hsmManager:       hsmManager,
+		auditDispatcher:  auditDispatcher,
+		tenantRepo:       tenantRepo,
+		keyOperationRepo: keyOperationRepo,
+		slotRepo:         slotRepo,
 	}
 }
 
-func (s *keyService) CreateKey(ctx context.Context, name string, algorithm valueobjects.KeyAlgorithm, size int, usage valueobjects.KeyUsage, tenantID string) (*entities.CryptographicKey, error) {
-	metadata := request.ContextValuesFromContext(ctx)
+func (s *keyService) CreateKey(
+	ctx context.Context,
+	name string,
+	algorithm valueobjects.KeyAlgorithm,
+	size int,
+	usage valueobjects.KeyUsage,
+	identityContext *valueobjects.IdentityContext) (key *entities.CryptographicKey, err error) {
 
-	go s.auditHSMOperation(ctx,
-		"HSM_KEY_CREATION_ATTEMPT",
-		metadata.Actor,
-		tenantID,
-		"",
-		"HSM_KEY",
-		"Attempting to create HSM key",
-		map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
-		metadata.IPAddress,
-		metadata.UserAgent,
-	)
-	// Validar parámetros de entrada
-	if !algorithm.IsValid() {
-		go s.auditHSMOperation(ctx,
-			"HSM_KEY_CREATION_FAILED",
-			metadata.Actor,
-			tenantID,
-			"",
-			"HSM_KEY",
-			"Invalid key algorithm",
-			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
-			metadata.IPAddress,
-			metadata.UserAgent,
-		)
-		return nil, errors.New(string(exceptions.ErrInvalidKeyAlgorithm))
+	ctx = context.WithValue(ctx, tenantIDKey, identityContext.TenantID)
+	creationCtx := &keyCreationContext{
+		name:            name,
+		algorithm:       algorithm,
+		size:            size,
+		usage:           usage,
+		identityContext: identityContext,
+		start:           time.Now(),
 	}
 
-	if !usage.IsValid() {
-		go s.auditHSMOperation(ctx,
-			"HSM_KEY_CREATION_FAILED",
-			metadata.Actor,
-			tenantID,
-			"",
-			"HSM_KEY",
-			"Invalid key usage",
-			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
-			metadata.IPAddress,
-			metadata.UserAgent,
-		)
-		return nil, errors.New(string(exceptions.ErrInvalidKeyUsage))
-	}
+	var slot *entities.HSMSlot
+	defer s.auditAndTrackKeyCreation(ctx, &key, &err, &slot, creationCtx)
 
-	// validar tenant
-	_, err := s.tenantRepo.FindByID(ctx, tenantID)
-	if err != nil {
-		go s.auditHSMOperation(ctx,
-			"HSM_KEY_CREATION_FAILED",
-			metadata.Actor,
-			tenantID,
-			"",
-			"HSM_KEY",
-			"Tenant not found",
-			map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
-			metadata.IPAddress,
-			metadata.UserAgent,
-		)
-		return nil, errors.New(string(exceptions.ErrTenantNotFound))
-	}
-
-	keyLabel := fmt.Sprintf("%s_%s_%s", tenantID, name, uuid.New().String()[:8])
-
-	// Generar par de claves en el HSM
-	publicKey, keyHandle, err := s.hsmClient.GenerateKeyPair(ctx, algorithm, size, keyLabel)
-	if err != nil {
-		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=generate_key_pair")
-	}
-
-	// Crear entidad de clave
-	key := &entities.CryptographicKey{
-		ID:        uuid.New().String(),
-		Name:      name,
-		Algorithm: algorithm,
-		KeySize:   size,
-		Usage:     usage,
-		PublicKey: publicKey,
-		KeyHandle: keyHandle,
-		TenantID:  tenantID,
-		Version:   1,
-		CreatedAt: time.Now().UTC(),
-		IsActive:  true,
-	}
-
-	// Validar entidad
-	if err := key.Validate(); err != nil {
-		// Rollback: eliminar clave del HSM
-		s.hsmClient.DeleteKey(ctx, keyHandle)
+	// Validate input parameters
+	if err := s.validateKeyParameters(algorithm, usage); err != nil {
 		return nil, err
 	}
 
-	// Guardar metadata
-	if err := s.keyRepo.Save(ctx, key); err != nil {
-		// Rollback: eliminar clave del HSM
-		s.hsmClient.DeleteKey(ctx, keyHandle)
+	// Get tenant and slot
+	slot, err = s.getTenantSlot(ctx, identityContext.TenantID)
+	if err != nil {
 		return nil, err
 	}
 
-	auditEvent := entities.AuditEvent{
-		Action:       "KEY_CREATED",
-		Actor:        "system", // En producción vendría del JWT
-		TenantID:     tenantID,
-		ResourceID:   key.ID,
-		ResourceType: "CRYPTOGRAPHIC_KEY",
-		Metadata:     map[string]interface{}{"key_name": name, "algorithm": algorithm, "key_size": size},
-		Timestamp:    time.Now().UTC(),
+	// Generate key in HSM
+	key, err = s.generateAndSaveKey(ctx, creationCtx, slot)
+	if err != nil {
+		return nil, err
 	}
-
-	// Auditoría no bloqueante - si falla, no afecta la operación principal
-	go func() {
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := s.auditClient.RecordEvent(timeoutCtx, &auditEvent); err != nil {
-			// Log local del error de auditoría, pero no falla la operación
-			// log.Printf("WARNING: Failed to audit key creation: %v", err)
-		}
-	}()
 
 	return key, nil
 }
@@ -176,24 +114,69 @@ func (s *keyService) ListKeys(ctx context.Context, tenantID string) ([]*entities
 	return s.keyRepo.FindByTenant(ctx, tenantID)
 }
 
-func (s *keyService) RotateKey(ctx context.Context, keyID, tenantID string) (*entities.CryptographicKey, error) {
+func (s *keyService) RotateKey(
+	ctx context.Context,
+	keyID string,
+	identityContext *valueobjects.IdentityContext,
+) (newKey *entities.CryptographicKey, err error) {
+	start := time.Now()
+
+	defer func() {
+		data := valueobjects.AuditData{
+			ServiceName: KeyServiceName,
+			EventType:   "HSM_OPERATION",
+			Operation:   "ROTATE_KEY",
+			Success:     err == nil,
+			ErrMsg:      helpers.ErrToString(err),
+			StatusCode:  exceptions.GetCode(err),
+			DurationMs:  time.Since(start).Milliseconds(),
+			ActorType:   "SERVICE",
+			Metadata: map[string]interface{}{
+				"key_id": keyID,
+			},
+		}
+		if s.auditDispatcher != nil {
+			s.auditDispatcher.AuditOperation(ctx, data, identityContext)
+		}
+	}()
+
 	// Obtener clave existente
-	existing, err := s.keyRepo.FindByIDAndTenant(ctx, keyID, tenantID)
+	existing, err := s.keyRepo.FindByIDAndTenant(ctx, keyID, identityContext.TenantID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Crear nueva versión de la clave
-	newKey, err := s.CreateKey(ctx, existing.Name+"-rotated", existing.Algorithm, existing.KeySize, existing.Usage, tenantID)
+	newKey, err = s.CreateKey(ctx, existing.Name+"-rotated", existing.Algorithm, existing.KeySize, existing.Purpose, identityContext)
 	if err != nil {
 		return nil, err
+	}
+
+	// validar tenant
+	tenant, err := getTenantWithAudit(ctx, identityContext.TenantID, s.tenantRepo, s.auditDispatcher)
+
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrTenantNotFound,
+			tenantErrorMsg,
+		).WithDetail("original_error", err.Error())
+	}
+
+	// get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			err.Error(),
+		).WithDetail("original_error", err.Error())
 	}
 
 	// Desactivar clave anterior
 	existing.Deactivate()
 	if err := s.keyRepo.Save(ctx, existing); err != nil {
 		// Rollback: eliminar nueva clave
-		s.hsmClient.DeleteKey(ctx, newKey.KeyHandle)
+		s.hsmManager.DeleteKey(ctx, newKey.KeyHandle, int(slot.SlotNumber))
 		s.keyRepo.Delete(ctx, newKey.ID)
 		return nil, err
 	}
@@ -201,14 +184,55 @@ func (s *keyService) RotateKey(ctx context.Context, keyID, tenantID string) (*en
 	return newKey, nil
 }
 
-func (s *keyService) DeleteKey(ctx context.Context, keyID, tenantID string) error {
+func (s *keyService) DeleteKey(ctx context.Context, keyID, tenantID string) (err error) {
+	start := time.Now()
+	defer func() {
+		data := valueobjects.AuditData{
+			ServiceName: KeyServiceName,
+			EventType:   "HSM_OPERATION",
+			Operation:   "DELETE_KEY",
+			Success:     err == nil,
+			ErrMsg:      helpers.ErrToString(err),
+			StatusCode:  exceptions.GetCode(err),
+			DurationMs:  time.Since(start).Milliseconds(),
+			ActorType:   "SERVICE",
+			Metadata: map[string]interface{}{
+				"key_id": keyID,
+			},
+		}
+		if s.auditDispatcher != nil {
+			s.auditDispatcher.AuditOperation(ctx, data, nil)
+		}
+	}()
+
+	// Obtener clave
 	key, err := s.keyRepo.FindByIDAndTenant(ctx, keyID, tenantID)
 	if err != nil {
 		return err
 	}
 
+	// validar tenant
+	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
+
+	if err != nil {
+		return exceptions.NewDomainError(
+			exceptions.ErrTenantNotFound,
+			tenantErrorMsg,
+		).WithDetail("original_error", err.Error())
+	}
+
+	// get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+
+	if err != nil {
+		return exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			err.Error(),
+		).WithDetail("original_error", err.Error())
+	}
+
 	// Eliminar del HSM
-	if err := s.hsmClient.DeleteKey(ctx, key.KeyHandle); err != nil {
+	if err := s.hsmManager.DeleteKey(ctx, key.KeyHandle, int(slot.SlotNumber)); err != nil {
 		return errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=delete_key")
 	}
 
@@ -216,111 +240,182 @@ func (s *keyService) DeleteKey(ctx context.Context, keyID, tenantID string) erro
 	return s.keyRepo.Delete(ctx, keyID)
 }
 
-// Nuevas operaciones para HSM directo
-func (s *keyService) CreateHSMKey(ctx context.Context, label string, algorithm valueobjects.KeyAlgorithm, size int, tenantID string) (*entities.HSMKey, error) {
-	// Validar tenant
-	_, err := s.tenantRepo.FindByID(ctx, tenantID)
-	if err != nil {
-		return nil, errors.New(string(exceptions.ErrTenantNotFound))
+// validateKeyParameters validates input parameters for key creation
+func (s *keyService) validateKeyParameters(algorithm valueobjects.KeyAlgorithm, usage valueobjects.KeyUsage) error {
+	if !algorithm.IsValid() {
+		return errors.New(string(exceptions.ErrInvalidKeyAlgorithm))
 	}
 
-	// Generar clave en HSM
-	publicKey, keyHandle, err := s.hsmClient.GenerateKeyPair(ctx, algorithm, size, label)
+	if !usage.IsValid() {
+		return errors.New(string(exceptions.ErrInvalidKeyUsage))
+	}
+
+	return nil
+}
+
+// getTenantSlot retrieves the HSM slot for a given tenant
+func (s *keyService) getTenantSlot(ctx context.Context, tenantID string) (*entities.HSMSlot, error) {
+	// Validate tenant
+	tenant, err := getTenantWithAudit(ctx, tenantID, s.tenantRepo, s.auditDispatcher)
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrTenantNotFound,
+			tenantErrorMsg,
+		).WithDetail("original_error", err.Error())
+	}
+
+	// Get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			"error checking slot existence",
+		).WithDetail("original_error", err.Error())
+	}
+
+	return slot, nil
+}
+
+// generateAndSaveKey generates a key in HSM and saves its metadata
+func (s *keyService) generateAndSaveKey(
+	ctx context.Context,
+	creationCtx *keyCreationContext,
+	slot *entities.HSMSlot) (*entities.CryptographicKey, error) {
+
+	keyLabel := fmt.Sprintf("%s_%s_%s",
+		creationCtx.identityContext.TenantID,
+		creationCtx.name,
+		uuid.New().String()[:8])
+
+	// Generate key pair in HSM
+	publicKey, keyHandle, err := s.hsmManager.GenerateKeyPair(
+		ctx,
+		creationCtx.algorithm,
+		creationCtx.size,
+		keyLabel,
+		int(slot.SlotNumber))
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=generate_key_pair")
 	}
 
-	hsmKey := &entities.HSMKey{
-		Label:     label,
-		Type:      valueobjects.KeyType(algorithm), // Convertir algoritmo a tipo
-		Size:      uint32(size),
-		TenantID:  tenantID,
-		PublicKey: publicKey,
-		KeyHandle: keyHandle,
-		CreatedAt: time.Now().UTC(),
-		IsActive:  true,
-		Usage:     valueobjects.KeyUsageBoth, // O determinar según el contexto
+	// Create key entity
+	key := &entities.CryptographicKey{
+		ID:               uuid.New().String(),
+		TenantID:         creationCtx.identityContext.TenantID,
+		OwnerType:        creationCtx.identityContext.OwnerType,
+		OwnerID:          creationCtx.identityContext.OwnerID,
+		ParentKeyID:      creationCtx.identityContext.ParentKeyID,
+		CertLevel:        creationCtx.identityContext.CertLevel,
+		Name:             creationCtx.name,
+		Alias:            keyLabel,
+		Algorithm:        creationCtx.algorithm,
+		KeySize:          creationCtx.size,
+		Purpose:          creationCtx.usage,
+		PublicKey:        publicKey,
+		KeyHandle:        keyHandle,
+		KeyLabel:         keyLabel,
+		IsHardwareBacked: true,
+		HSMSlotID:        slot.ID,
+		Version:          1,
+		ExpirationDate:   time.Now().Add(365 * 24 * time.Hour), // 1 year default
+		IsActive:         true,
 	}
 
-	// Auditoría
-	// go s.auditHSMOperation(ctx, "HSM_KEY_CREATED", tenantID, label, err == nil)
-
-	return hsmKey, nil
-}
-func (s *keyService) ListHSMKeys(ctx context.Context, tenantID string) ([]*entities.HSMKey, error) {
-	// Validar tenant
-	_, err := s.tenantRepo.FindByID(ctx, tenantID)
-	if err != nil {
-		return nil, errors.New(string(exceptions.ErrTenantNotFound))
-	}
-
-	// Listar todas las claves y filtrar por tenant
-	allKeys, err := s.hsmClient.ListKeys(ctx)
-	if err != nil {
+	// Validate entity
+	if err := key.Validate(); err != nil {
+		// Rollback: delete key from HSM
+		s.hsmManager.DeleteKey(ctx, keyHandle, int(slot.SlotNumber))
 		return nil, err
 	}
 
-	var tenantKeys []*entities.HSMKey
-	for _, key := range allKeys {
-		if key.TenantID == tenantID {
-			tenantKeys = append(tenantKeys, key)
-		}
-	}
-
-	return tenantKeys, nil
-}
-func (s *keyService) GetHSMPublicKey(ctx context.Context, keyLabel, tenantID string) ([]byte, error) {
-	// Validar tenant
-	_, err := s.tenantRepo.FindByID(ctx, tenantID)
-	if err != nil {
-		return nil, errors.New(string(exceptions.ErrTenantNotFound))
-	}
-
-	// Buscar la clave por label y tenant
-	allKeys, err := s.hsmClient.ListKeys(ctx)
-	if err != nil {
+	// Save to repository
+	if err := s.keyRepo.Save(ctx, key); err != nil {
+		// Rollback: delete key from HSM
+		s.hsmManager.DeleteKey(ctx, keyHandle, int(slot.SlotNumber))
 		return nil, err
 	}
 
-	for _, key := range allKeys {
-		if key.Label == keyLabel && key.TenantID == tenantID {
-			return key.PublicKey, nil
-		}
-	}
-
-	return nil, errors.New(string(exceptions.ErrKeyNotFound))
+	return key, nil
 }
 
-// Método auxiliar para auditoría de operaciones HSM
-func (s *keyService) auditHSMOperation(ctx context.Context,
-	action,
-	actor,
-	tenantID,
-	resourceID string,
-	resourceType string,
-	details string,
-	metadata map[string]interface{},
-	ipAddress,
-	userAgent string,
-) {
-	event := entities.AuditEvent{
-		Action:       action,
-		Actor:        actor,
-		TenantID:     tenantID,
-		ResourceID:   resourceID,
-		ResourceType: resourceType,
-		Details:      details,
-		Metadata:     metadata,
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
+// auditAndTrackKeyCreation performs audit logging and key operation tracking for key creation
+func (s *keyService) auditAndTrackKeyCreation(
+	ctx context.Context,
+	key **entities.CryptographicKey,
+	err *error,
+	slot **entities.HSMSlot,
+	creationCtx *keyCreationContext) {
+
+	// Build metadata
+	metadata := map[string]interface{}{
+		"key_name":        creationCtx.name,
+		"algorithm":       creationCtx.algorithm,
+		"key_size":        creationCtx.size,
+		"usage":           creationCtx.usage,
+		"parent_key_id":   creationCtx.identityContext.ParentKeyID,
+		"organization_id": creationCtx.identityContext.OrganizationID,
+	}
+	if *slot != nil {
+		metadata["slot_id"] = (*slot).ID
 	}
 
-	go func() {
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	// Audit operation
+	data := valueobjects.AuditData{
+		ServiceName: KeyServiceName,
+		EventType:   "HSM_OPERATION",
+		Operation:   "CREATE_KEY",
+		Success:     *err == nil,
+		ErrMsg:      helpers.ErrToString(*err),
+		StatusCode:  exceptions.GetCode(*err),
+		DurationMs:  time.Since(creationCtx.start).Milliseconds(),
+		ActorType:   "SERVICE",
+		Metadata:    metadata,
+	}
+	if s.auditDispatcher != nil {
+		s.auditDispatcher.AuditOperation(ctx, data, creationCtx.identityContext)
+	}
 
-		if err := s.auditClient.RecordEvent(timeoutCtx, &event); err != nil {
-			log.Printf("WARNING: Failed to audit HSM operation: %v", err)
+	// Track key operation only if key was successfully created
+	if *key != nil && (*key).ID != "" && s.keyOperationRepo != nil {
+		operation := entities.KeyOperation{
+			KeyID:           (*key).ID,
+			TenantID:        creationCtx.identityContext.TenantID,
+			OrganizationID:  creationCtx.identityContext.OrganizationID,
+			OperationType:   valueobjects.OperationKeyTypeGenerate,
+			Status:          s.getOperationStatus(*err),
+			Level:           valueobjects.OperationKeyLevelHigh,
+			InitializedBy:   creationCtx.identityContext.UserID,
+			InputSizeBytes:  0,
+			OutputSizeBytes: 0,
+			DurationMs:      time.Since(creationCtx.start).Milliseconds(),
+			ResultSummary:   s.getResultSummary(*err),
+			ErrorDetails:    s.getErrorDetails(*err),
 		}
-	}()
+
+		s.keyOperationRepo.Save(ctx, operation)
+	}
+}
+
+// getOperationStatus returns the operation status based on error
+func (s *keyService) getOperationStatus(err error) valueobjects.OperationKeyStatus {
+	if err == nil {
+		return valueobjects.OperationKeyStatusSuccess
+	}
+	return valueobjects.OperationKeyStatusFailed
+}
+
+// getResultSummary returns a result summary based on error
+func (s *keyService) getResultSummary(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return "Success"
+}
+
+// getErrorDetails returns error details
+func (s *keyService) getErrorDetails(err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return ""
 }

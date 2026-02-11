@@ -1,0 +1,66 @@
+meta {
+  name: Verify Hash Signature
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/keys/verify
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "key_id" : "e5e38749-1b79-4ede-99ec-04557c9de11f",
+    "Hash" : "aWRlbnRpdHlDb250ZXh0ICp2YWx1ZW9iamVjdHMuSWRlbnRpdHlDb250ZXh0",
+    "signature": "U8fgzeYMPHKs1Ne2v25hgGsD39aKZ64sDyUdMyGp7EgrBeInDQ1QCiIeLY5b1rs63G9KjWAATP8WscTbdmn0E3/ADEl0M1G7Sd6e0NIlHWVEpujhcGXCYDFv7/MzKPBfPr21l7M7L4lK9e0bUMLds6chsQLe8MRQc+GaYNOLx03G5bCwuL3updQLjDfuX2viqQhspFH7/ZFmgjetavFraHd055Op+epG/57IxKd1vr8tBWXhgxCaMLV1LULOfTUcdzxeqR/LDz3KaDh/XGFyh12cZ5uWYLM8nxw3XbRlXNaeDqfycCVpQbW/VYEn4i49DRRjtuf8TP899XDzgr56dQ=="
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Verify Hash Signature
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys/verify
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "key_id" : "db583b64-24fd-402c-aa52-2b018a6a2d9d",
+        "Hash" : "aWRlbnRpdHlDb250ZXh0ICp2YWx1ZW9iamVjdHMuSWRlbnRpdHlDb250ZXh0",
+        "signature": "W3J28fOL+nZ5Lqkv1/sLx8x+NfoB+sLQiwffWWajRIwUXQ7DfMQHH9Bx1nf0iDK8zUfg3QZYXjn7+ztxwGpGRqgoQWqkmsFx7eL4XPahGN4VnEIOh2NP1yU/FtzDbk54VLFW+WzXUfYTckTOu4QJ9rXn9py3jgjb6RTyXnLrOQUfeC4ca8y3M0mDR27DQBBNTBf6cQSSEDBeuPwG5SXjgtA8u3zlLwf71Rdbkx4l3ouxfF9jM5oQipCwGMRnikaOj4yHagWFFI5qD0bGdrXD0owXBPugulz13ljTkrsHq2fz6ADZPd8Ni3iQZPle+4DD5MKBjmkew2ttYSBVUR+XQA=="
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 8496718a-4e81-4e48-870b-df249c7feff9
+      date: Mon, 09 Feb 2026 21:28:06 GMT
+      content-length: 96
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "is_valid": true,
+          "key_id": "db583b64-24fd-402c-aa52-2b018a6a2d9d",
+          "message": "Signature is valid"
+        }
+      '''
+    }
+  }
+}

@@ -9,6 +9,7 @@ type Tenant struct {
 	PlanType     PlanType
 	Status       TenantStatus
 	Config       map[string]interface{}
+	HSMSlotID    *string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

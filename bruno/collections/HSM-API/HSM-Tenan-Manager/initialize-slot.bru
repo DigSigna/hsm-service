@@ -1,0 +1,62 @@
+meta {
+  name: initialize-slot
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/internal/hsm/slots/initialize
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "pin" : "1234"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Init slot to reseller
+  
+  request: {
+    url: {{baseUrl}}/internal/hsm/slots/initialize
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "pin" : "1234"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: aa86742a-6e8f-4ac4-a344-89b28f66a127
+      date: Fri, 06 Feb 2026 19:50:41 GMT
+      content-length: 140
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "Slot initialized successfully",
+          "slot": "9f410553-1a28-45ea-8763-9301597ed109",
+          "tenant_id": "30000000-3000-3000-3000-000000000001"
+        }
+      '''
+    }
+  }
+}
