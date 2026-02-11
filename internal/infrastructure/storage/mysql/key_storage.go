@@ -49,7 +49,7 @@ func (r *MySQLKeyStorage) Save(ctx context.Context, key *entities.CryptographicK
 			key_label,
 
 			is_hardware_backed,
-			hsm_slot,
+			hsm_slot_id,
 
 			expiration_date,
 
@@ -79,7 +79,7 @@ func (r *MySQLKeyStorage) Save(ctx context.Context, key *entities.CryptographicK
 		key.KeyLabel,
 
 		true, //is_hardware_backed
-		key.HSMSlot,
+		key.HSMSlotID,
 
 		key.ExpirationDate,
 
@@ -88,8 +88,6 @@ func (r *MySQLKeyStorage) Save(ctx context.Context, key *entities.CryptographicK
 	)
 
 	if err != nil {
-		println("Parent key ID:", key.ParentKeyID)
-		println("Error saving key---:", err.Error())
 		return fmt.Errorf("failed to get last insert id: %w", err)
 	}
 
@@ -97,7 +95,6 @@ func (r *MySQLKeyStorage) Save(ctx context.Context, key *entities.CryptographicK
 }
 
 func (r *MySQLKeyStorage) FindByID(ctx context.Context, id string) (*entities.CryptographicKey, error) {
-	log.Println("Finding key by ID:", id)
 	query := `
 		SELECT id, name, public_key, created_at, expiration_date, is_active
 		FROM crypto_keys
@@ -145,7 +142,7 @@ func (r *MySQLKeyStorage) FindByID(ctx context.Context, id string) (*entities.Cr
 
 func (r *MySQLKeyStorage) FindByIDAndTenant(ctx context.Context, id, tenantID string) (*entities.CryptographicKey, error) {
 	query := `
-		SELECT id, name, algorithm, key_size, purpose, public_key, key_handle, tenant_id, version, created_at, is_active
+		SELECT id, name, algorithm, key_size, purpose, public_key, key_handle, key_label, tenant_id, version, created_at, is_active
 		FROM crypto_keys
 		WHERE id = ? AND tenant_id = ?
 	`
@@ -162,6 +159,7 @@ func (r *MySQLKeyStorage) FindByIDAndTenant(ctx context.Context, id, tenantID st
 		&usageStr,
 		&key.PublicKey,
 		&key.KeyHandle,
+		&key.KeyLabel,
 		&key.TenantID,
 		&key.Version,
 		&createdAt,

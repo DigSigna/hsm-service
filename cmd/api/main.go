@@ -17,6 +17,7 @@ import (
 	"hsm-service/internal/infrastructure/config"
 	"hsm-service/internal/infrastructure/database"
 	"hsm-service/internal/infrastructure/hsm"
+	"hsm-service/internal/infrastructure/secrets"
 	"hsm-service/internal/infrastructure/storage/mysql"
 	"hsm-service/internal/interfaces/http/handlers"
 	"hsm-service/internal/interfaces/http/middlewares"
@@ -71,32 +72,61 @@ func main() {
 		zapLogger.Info("Audit worker closed")
 	}()
 
-	// Crear manager HSM
-	hsmManager, err := initializeHSM(cfg, auditDispatcher, zapLogger)
-
+	aesKeyManager, err := createAESKeyManager(cfg, auditDispatcher)
 	if err != nil {
-		log.Fatalf("Failed to create HSM manager: %v", err)
+		log.Fatal("Failed to create AESKeyManager:", err)
 	}
-	defer func() {
-		if err := hsmManager.CloseAll(); err != nil {
-			zapLogger.Error("Failed to close HSM manager", zap.Error(err))
-		}
-		zapLogger.Info("HSM manager closed")
-	}()
-
-	// Crear clientes HSM para cada slot (0-3 para MVP)
 
 	// Repositories
 	keyStorage := mysql.NewMySQLKeyStorage(db)
 	tenantStorage := mysql.NewMySQLTenantStorage(db)
 	keyOperationStorage := mysql.NewMySQLKeyOperationStorage(db)
+	slotStorage := mysql.NewMySQLSlotStorage(db)
+	aesKeyMetadataStorage := mysql.NewMySQLAESKeyMetadataStorage(db)
+
+	// HSM Bootstrapper
+	bootstrapper := hsm.NewHSMBootstrapper(
+		cfg,
+		auditDispatcher,
+		slotStorage,
+		aesKeyManager, // ¡Aquí va!
+		aesKeyMetadataStorage,
+		zapLogger,
+	)
+	// Crear manager HSM
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	hsmManager, err := bootstrapper.Bootstrap(ctx)
+	if err != nil {
+		log.Fatal("Failed to bootstrap HSM:", err)
+	}
+	defer hsmManager.CloseAll()
 
 	// Application Services
-	keyService := services.NewKeyService(keyStorage, hsmManager, auditDispatcher, tenantStorage, keyOperationStorage)
 	// call hsm key service if needed
 	// hsmKeyService := services.NewHSMKeyService(hsmManager, keyStorage, auditDispatcher, tenantStorage)
-	signingService := services.NewSigningService(keyStorage, hsmManager, auditDispatcher, tenantStorage)
-	slotService := services.NewSlotService(hsmManager, tenantStorage, auditDispatcher, &cfg.HSM)
+	slotService := services.NewSlotService(
+		hsmManager,
+		tenantStorage,
+		auditDispatcher,
+		&cfg.HSM,
+		slotStorage,
+		aesKeyManager,
+		aesKeyMetadataStorage)
+	signingService := services.NewSigningService(
+		keyStorage,
+		hsmManager,
+		auditDispatcher,
+		tenantStorage,
+		keyOperationStorage,
+		slotStorage)
+	keyService := services.NewKeyService(
+		keyStorage,
+		hsmManager,
+		auditDispatcher,
+		tenantStorage,
+		keyOperationStorage,
+		slotStorage)
 	// Auth setup (JWT validation)
 	authConfig := &auth.Config{
 		Mode:             cfg.Environment, // "development" o "production"
@@ -173,41 +203,6 @@ func initializeDatabase(cfg *config.Config) (*sql.DB, error) {
 	return db, nil
 }
 
-// initializeHSM initializes the HSM manager with clients for each slot.
-func initializeHSM(cfg *config.Config, auditDispatcher output.AuditEventDispatcher, zapLogger *logger.ZapLogger) (*hsm.HSMManager, error) {
-	hsmManager := hsm.NewHSMManager(auditDispatcher)
-
-	// Crear clientes HSM para cada slot (0-3 para MVP)
-	clientsCreated := 0
-	for slot := uint(0); slot < 4; slot++ {
-		hsmClient, err := hsm.NewSoftHSMClient(
-			cfg.HSM.LibraryPath,
-			cfg.HSM.Pin,
-			slot, // Slot específico
-			auditDispatcher,
-		)
-
-		if err != nil {
-			// Para MVP, podemos continuar si algunos slots fallan
-			zapLogger.Error("Failed to create HSM client for slot",
-				zap.Uint("slot", slot),
-				zap.Error(err))
-			continue
-		}
-
-		hsmManager.RegisterClient(int(slot), hsmClient)
-		clientsCreated++
-	}
-
-	if clientsCreated == 0 {
-		zapLogger.Error("No HSM clients were created successfully")
-		return nil, fmt.Errorf("no HSM clients were created successfully")
-	}
-
-	zapLogger.Info("HSM clients initialized", zap.Int("count", clientsCreated))
-	return hsmManager, nil
-}
-
 // Run server with timeouts and graceful shutdown
 func runServerWithTimeouts(cfg *config.Config, srv *http.Server, zapLogger *logger.ZapLogger) error {
 	// Channel to listen for errors coming from the listener.
@@ -252,4 +247,30 @@ func runServerWithTimeouts(cfg *config.Config, srv *http.Server, zapLogger *logg
 		zapLogger.Info("Shutdown complete")
 	}
 	return nil
+}
+
+func createAESKeyManager(cfg *config.Config, audit output.AuditEventDispatcher) (output.AESKeyManager, error) {
+	aesConfig := secrets.Config{
+		Strategy: valueobjects.AESKeyManagerStrategy(cfg.AESKeyManager.Strategy),
+		Local: secrets.LocalConfig{
+			MasterKeyKey: cfg.AESKeyManager.Local.MasterKey,
+			KeyID:        cfg.AESKeyManager.Local.KeyID,
+		},
+		K8S: secrets.K8SConfig{
+			SecretName:      cfg.AESKeyManager.K8S.SecretName,
+			SecretNamespace: cfg.AESKeyManager.K8S.SecretNamespace,
+			MasterKeyKey:    cfg.AESKeyManager.K8S.MasterKeyKey,
+			OldMasterKeyKey: cfg.AESKeyManager.K8S.MasterKeyKey,
+			InCluster:       cfg.AESKeyManager.K8S.InCluster,
+			KubeconfigPath:  cfg.AESKeyManager.K8S.KubeconfigPath,
+		},
+		Vault: secrets.VaultConfig{
+			Address: cfg.AESKeyManager.Vault.Address,
+			Token:   cfg.AESKeyManager.Vault.Token,
+			Path:    cfg.AESKeyManager.Vault.Path,
+			KeyName: cfg.AESKeyManager.Vault.KeyName,
+		},
+	}
+
+	return secrets.NewAESKeyManager(aesConfig, audit)
 }

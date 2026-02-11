@@ -85,6 +85,7 @@ func SetupRouter(deps *RouterDependencies) *gin.Engine {
 				keys.POST("", deps.KeyHandler.CreateKey)
 				keys.GET("/:tenant_id", deps.KeyHandler.ListKeys)
 				keys.POST("/sign", deps.KeyHandler.SignHash)
+				keys.POST("/verify", deps.KeyHandler.VerifyHashSignature)
 			}
 		}
 	}

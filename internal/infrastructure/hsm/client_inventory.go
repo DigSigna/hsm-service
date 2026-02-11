@@ -7,7 +7,6 @@ import (
 	"hsm-service/internal/domain/entities"
 	"hsm-service/internal/domain/exceptions"
 	"hsm-service/internal/domain/valueobjects"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,9 +36,10 @@ func (c *SoftHSMClient) GetPublicKey(ctx context.Context, keyHandle string) (pub
 		}
 	}()
 
-	handle, err := parseKeyHandle(keyHandle)
+	// Find the public key by label (persistent identifier)
+	handle, err := c.findPublicKeyByLabel(keyHandle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to find public key with label '%s': %w", keyHandle, err)
 	}
 
 	c.mutex.RLock()
@@ -83,9 +83,15 @@ func (c *SoftHSMClient) DeleteKey(ctx context.Context, keyHandle string) (err er
 		}
 	}()
 
-	handle, err := parseKeyHandle(keyHandle)
+	// Find the private key by label (persistent identifier)
+	// We try to find the private key first; if not found, try the public key
+	handle, err := c.findPrivateKeyByLabel(keyHandle)
 	if err != nil {
-		return err
+		// If private key not found, try to find public key
+		handle, err = c.findPublicKeyByLabel(keyHandle)
+		if err != nil {
+			return fmt.Errorf("failed to find key with label '%s': %w", keyHandle, err)
+		}
 	}
 
 	c.mutex.Lock()
@@ -162,7 +168,8 @@ func (c *SoftHSMClient) getKeyInfo(handle pkcs11.ObjectHandle) (*entities.HSMKey
 	}
 
 	hsmKey := &entities.HSMKey{
-		KeyHandle: strconv.FormatUint(uint64(handle), 10),
+		// KeyHandle will be set to the Label (persistent identifier)
+		// NOT the numeric handle (which is ephemeral)
 		CreatedAt: time.Now().UTC(),
 		IsActive:  true,
 		Usage:     valueobjects.KeyUsageBoth,
@@ -171,7 +178,10 @@ func (c *SoftHSMClient) getKeyInfo(handle pkcs11.ObjectHandle) (*entities.HSMKey
 	for _, attr := range attrs {
 		switch attr.Type {
 		case pkcs11.CKA_LABEL:
-			hsmKey.Label = string(attr.Value)
+			label := string(attr.Value)
+			hsmKey.Label = label
+			// Use label as the persistent key identifier
+			hsmKey.KeyHandle = label
 		case pkcs11.CKA_KEY_TYPE:
 			hsmKey.Type = mapKeyType(attr.Value[0])
 		case pkcs11.CKA_ID:
@@ -181,7 +191,7 @@ func (c *SoftHSMClient) getKeyInfo(handle pkcs11.ObjectHandle) (*entities.HSMKey
 		}
 	}
 
-	// Try to get public key
+	// Try to get public key using the label as identifier
 	if publicKey, err := c.GetPublicKey(context.Background(), hsmKey.KeyHandle); err == nil {
 		hsmKey.PublicKey = publicKey
 	}

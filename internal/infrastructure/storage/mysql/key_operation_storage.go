@@ -58,6 +58,7 @@ func (m *MySQLKeyOperationStorage) Save(ctx context.Context, key entities.KeyOpe
 	)
 
 	if err != nil {
+		println("Error saving key operation:", err.Error())
 		return fmt.Errorf("failed to save key operation: %w", err)
 	}
 

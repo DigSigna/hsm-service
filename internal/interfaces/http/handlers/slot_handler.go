@@ -18,7 +18,6 @@ func NewSlotHandler(slotManager input.SlotManager) *SlotHandler {
 }
 
 type InitializeSlotRequest struct {
-	Pin string `json:"pin" binding:"required,min=4"`
 }
 
 // InitializeSlot godoc
@@ -30,12 +29,6 @@ type InitializeSlotRequest struct {
 // @Success 201 {object} map[string]interface{}
 // @Router /internal/hsm/slots/initialize [post]
 func (h *SlotHandler) InitializeSlot(c *gin.Context) {
-	var req InitializeSlotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	identityVal, exists := c.Get("identity_context")
 	if !exists {
 		c.JSON(401, gin.H{"error": "identity not found"})
@@ -44,7 +37,7 @@ func (h *SlotHandler) InitializeSlot(c *gin.Context) {
 
 	identity := identityVal.(*valueobjects.IdentityContext)
 
-	slot, err := h.slotManager.InitializeSlot(c.Request.Context(), req.Pin, identity)
+	slotID, err := h.slotManager.InitializeSlot(c.Request.Context(), identity)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -52,7 +45,7 @@ func (h *SlotHandler) InitializeSlot(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Slot initialized successfully",
-		"slot":      slot,
+		"slot":      slotID,
 		"tenant_id": identity.TenantID,
 	})
 }

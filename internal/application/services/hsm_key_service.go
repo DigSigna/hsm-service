@@ -8,6 +8,7 @@ import (
 	"hsm-service/internal/domain/ports/input"
 	"hsm-service/internal/domain/ports/output"
 	"hsm-service/internal/domain/valueobjects"
+	"hsm-service/pkg/helpers"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type HSMKeyService struct {
 	hsmManager      output.HSMManager
 	auditDispatcher output.AuditEventDispatcher
 	tenantRepo      output.TenantRepository
+	slotRepo        output.SlotRepository
 }
 
 var _ input.HSMKeyManager = (*HSMKeyService)(nil)
@@ -25,12 +27,14 @@ func NewHSMKeyService(
 	hsmManager output.HSMManager,
 	auditDispatcher output.AuditEventDispatcher,
 	tenantRepo output.TenantRepository,
+	slotRepo output.SlotRepository,
 ) input.HSMKeyManager {
 	return &HSMKeyService{
 		keyRepo:         keyRepo,
 		hsmManager:      hsmManager,
 		auditDispatcher: auditDispatcher,
 		tenantRepo:      tenantRepo,
+		slotRepo:        slotRepo,
 	}
 }
 
@@ -42,7 +46,7 @@ func (s *HSMKeyService) CreateHSMKey(ctx context.Context, label string, algorith
 			EventType:   "HSM_OPERATION",
 			Operation:   "CREATE_HSM_KEY",
 			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
+			ErrMsg:      helpers.ErrToString(err),
 			StatusCode:  exceptions.GetCode(err),
 			DurationMs:  time.Since(start).Milliseconds(),
 			ActorType:   "SERVICE",
@@ -67,8 +71,18 @@ func (s *HSMKeyService) CreateHSMKey(ctx context.Context, label string, algorith
 		).WithDetail("original_error", err.Error())
 	}
 
+	// get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			err.Error(),
+		).WithDetail("original_error", err.Error())
+	}
+
 	// Generar clave en HSM
-	publicKey, keyHandle, err := s.hsmManager.GenerateKeyPair(ctx, algorithm, size, label, tenant.HSMSlot)
+	publicKey, keyHandle, err := s.hsmManager.GenerateKeyPair(ctx, algorithm, size, label, int(slot.SlotNumber))
 	if err != nil {
 		return nil, errors.New(string(exceptions.ErrHSMOperationFailed) + ": operation=generate_key_pair")
 	}
@@ -95,7 +109,7 @@ func (s *HSMKeyService) ListHSMKeys(ctx context.Context, tenantID string) (tenan
 			EventType:   "HSM_OPERATION",
 			Operation:   "LIST_HSM_KEYS",
 			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
+			ErrMsg:      helpers.ErrToString(err),
 			StatusCode:  exceptions.GetCode(err),
 			DurationMs:  time.Since(start).Milliseconds(),
 			ActorType:   "SERVICE",
@@ -114,8 +128,18 @@ func (s *HSMKeyService) ListHSMKeys(ctx context.Context, tenantID string) (tenan
 		).WithDetail("original_error", err.Error())
 	}
 
+	// get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			err.Error(),
+		).WithDetail("original_error", err.Error())
+	}
+
 	// Listar todas las claves y filtrar por tenant
-	allKeys, err := s.hsmManager.ListKeys(ctx, tenant.HSMSlot)
+	allKeys, err := s.hsmManager.ListKeys(ctx, int(slot.SlotNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +160,7 @@ func (s *HSMKeyService) GetHSMPublicKey(ctx context.Context, keyLabel, tenantID 
 			EventType:   "HSM_OPERATION",
 			Operation:   "GET_HSM_PUBLIC_KEY",
 			Success:     err == nil,
-			ErrMsg:      ErrToString(err),
+			ErrMsg:      helpers.ErrToString(err),
 			StatusCode:  exceptions.GetCode(err),
 			DurationMs:  time.Since(start).Milliseconds(),
 			ActorType:   "SERVICE",
@@ -155,8 +179,18 @@ func (s *HSMKeyService) GetHSMPublicKey(ctx context.Context, keyLabel, tenantID 
 		).WithDetail("original_error", err.Error())
 	}
 
+	// get slot
+	slot, err := getSlotWithAudit(ctx, *tenant.HSMSlotID, s.slotRepo, s.auditDispatcher)
+
+	if err != nil {
+		return nil, exceptions.NewDomainError(
+			exceptions.ErrSlotNotFound,
+			err.Error(),
+		).WithDetail("original_error", err.Error())
+	}
+
 	// Buscar la clave por label y tenant
-	allKeys, err := s.hsmManager.ListKeys(ctx, tenant.HSMSlot)
+	allKeys, err := s.hsmManager.ListKeys(ctx, int(slot.SlotNumber))
 	if err != nil {
 		return nil, err
 	}

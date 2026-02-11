@@ -27,3 +27,10 @@ func GenerateTenantSlotLabel(tenantID string) string {
 
 	return label
 }
+
+func ErrToString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}

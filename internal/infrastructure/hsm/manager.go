@@ -44,9 +44,18 @@ func (m *HSMManager) RegisterClient(slot int, client output.HSMClient) {
 func (m *HSMManager) GetClientForSlot(slot int) (output.HSMClient, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-
+	println("DEBUG: Getting HSM client for slot", slot)
 	client, exists := m.clients[slot]
 	if !exists {
+		// generate HSM client for slot if not exists
+		// hsmClient, err := hsm.NewSoftHSMClient(
+		// 	cfg.HSM.LibraryPath,
+		// 	cfg.HSM.Pin,
+		// 	slot, // Slot específico
+		// 	auditDispatcher,
+		// )
+		println("Error: No client found for slot", slot)
+
 		return nil, fmt.Errorf("no HSM client registered for slot %d", slot)
 	}
 
@@ -89,13 +98,18 @@ func (m *HSMManager) GetPublicKey(ctx context.Context, keyHandle string, slot in
 	return client.GetPublicKey(ctx, keyHandle)
 }
 
-func (m *HSMManager) SignHash(ctx context.Context, keyHandle string, hash []byte, slot int) ([]byte, error) {
+func (m *HSMManager) SignHash(
+	ctx context.Context,
+	keyHandle string,
+	hash []byte,
+	slot int,
+	identityContext *valueobjects.IdentityContext) ([]byte, error) {
 	client, err := m.GetClientForSlot(slot)
 	if err != nil {
 		return nil, err
 	}
 
-	return client.SignHash(ctx, keyHandle, hash)
+	return client.SignHash(ctx, keyHandle, hash, identityContext)
 }
 
 func (m *HSMManager) VerifySignature(
@@ -159,6 +173,12 @@ func (m *HSMManager) FindKeysByLabel(ctx context.Context, labelPattern string, s
 	return client.FindKeysByLabel(ctx, labelPattern)
 }
 
+func (m *HSMManager) ClientCount() int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return len(m.clients)
+}
+
 // HealthCheckAll verifica estado de todos los slots
 func (m *HSMManager) HealthCheckAll() map[int]bool {
 	m.mutex.RLock()
@@ -208,6 +228,16 @@ func (m *HSMManager) CloseAll() error {
 	}
 
 	m.clients = make(map[int]output.HSMClient)
+
+	// Finalize the shared PKCS#11 context after all clients are closed
+	// This should be the LAST operation during application shutdown
+	if err := FinalizePKCS11Context(); err != nil {
+		if lastErr == nil {
+			lastErr = err
+		}
+		// Log error but don't fail if there was already an error from clients
+	}
+
 	return lastErr
 }
 

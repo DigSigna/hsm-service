@@ -10,7 +10,7 @@ const (
 	OperationKeyTypeImport   OperationKeyType = "IMPORT"
 	OperationKeyTypeExport   OperationKeyType = "EXPORT"
 	// Cryptographic operations
-	OperationKeyTypeSigning    OperationKeyType = "SIGNING"
+	OperationKeyTypeSigning    OperationKeyType = "SIGN"
 	OperationKeyTypeVerify     OperationKeyType = "VERIFY"
 	OperationKeyTypeEncryption OperationKeyType = "ENCRYP"
 	OperationKeyTypeDecryption OperationKeyType = "DECRYP"

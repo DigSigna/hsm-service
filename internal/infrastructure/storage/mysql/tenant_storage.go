@@ -26,26 +26,35 @@ func NewMySQLTenantStorage(db *sql.DB) output.TenantRepository {
 func (r *MySQLTenantStorage) FindByID(ctx context.Context, id string) (*entities.Tenant, error) {
 	query := `
 		SELECT id, name, contact_email, plan_type, 
-		status, hsm_slot, created_at, updated_at
+		status, hsm_slot_id, created_at, updated_at
 		FROM tenants
 		WHERE id = ?
 	`
 	var tenant entities.Tenant
-
+	// handle null HSMSlotID
+	var hsmSlotID sql.NullString
+	_ = hsmSlotID
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&tenant.ID,
 		&tenant.Name,
 		&tenant.ContactEmail,
 		&tenant.PlanType,
 		&tenant.Status,
-		&tenant.HSMSlot,
+		&hsmSlotID,
 		&tenant.CreatedAt,
 		&tenant.UpdatedAt,
 	)
-
+	if hsmSlotID.Valid {
+		tenant.HSMSlotID = &hsmSlotID.String
+	} else {
+		tenant.HSMSlotID = nil
+	}
+	// to do return error id HSMSlotID is null
 	if err == sql.ErrNoRows {
+		println("error %s", err.Error())
 		return nil, errors.New(string(exceptions.ErrTenantNotFound))
 	} else if err != nil {
+		println("error %s", err.Error())
 		return nil, fmt.Errorf("failed to query tenant by ID: %w", err)
 	}
 	return &tenant, nil
@@ -69,9 +78,9 @@ func (r *MySQLTenantStorage) Exists(ctx context.Context, id string) (bool, error
 func (r *MySQLTenantStorage) FindByHSMSlot(ctx context.Context, slot uint) (*entities.Tenant, error) {
 	query := `
 		SELECT id, name, contact_email, plan_type, 
-		status, hsm_slot, created_at, updated_at
+		status, hsm_slot_id, created_at, updated_at
 		FROM tenants
-		WHERE hsm_slot = ?
+		WHERE hsm_slot_id = ?
 	`
 	var tenant entities.Tenant
 	err := r.db.QueryRowContext(ctx, query, slot).Scan(
@@ -80,7 +89,7 @@ func (r *MySQLTenantStorage) FindByHSMSlot(ctx context.Context, slot uint) (*ent
 		&tenant.ContactEmail,
 		&tenant.PlanType,
 		&tenant.Status,
-		&tenant.HSMSlot,
+		&tenant.HSMSlotID,
 		&tenant.CreatedAt,
 		&tenant.UpdatedAt,
 	)

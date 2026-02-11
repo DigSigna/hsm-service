@@ -23,7 +23,13 @@ type HSMManager interface {
 	ListKeys(ctx context.Context, slot int) ([]*entities.HSMKey, error)
 	GetPublicKey(ctx context.Context, keyHandle string, slot int) ([]byte, error)
 
-	SignHash(ctx context.Context, keyHandle string, hash []byte, slot int) ([]byte, error)
+	SignHash(
+		ctx context.Context,
+		keyHandle string,
+		hash []byte,
+		slot int,
+		identityContext *valueobjects.IdentityContext,
+	) ([]byte, error)
 	VerifySignature(ctx context.Context, keyHandle string, hash, signature []byte, slot int) (bool, error)
 	Encrypt(ctx context.Context, keyHandle string, plaintext []byte, slot int) ([]byte, error)
 	Decrypt(ctx context.Context, keyHandle string, ciphertext []byte, slot int) ([]byte, error)
@@ -39,6 +45,7 @@ type HSMManager interface {
 	FindKeysByLabel(ctx context.Context, labelPattern string, slot int) ([]*entities.HSMKey, error)
 
 	// Management
+	ClientCount() int
 	HealthCheckAll() map[int]bool
 	HealthCheck(ctx context.Context, slot int) error
 	CloseAll() error

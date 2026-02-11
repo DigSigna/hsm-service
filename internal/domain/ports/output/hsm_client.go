@@ -15,7 +15,7 @@ type HSMClient interface {
 	GetPublicKey(ctx context.Context, keyHandle string) ([]byte, error)
 
 	// Operaciones Criptográficas
-	SignHash(ctx context.Context, keyHandle string, hash []byte) ([]byte, error)
+	SignHash(ctx context.Context, keyHandle string, hash []byte, identityContext *valueobjects.IdentityContext) ([]byte, error)
 	VerifySignature(ctx context.Context, keyHandle string, hash, signature []byte) (bool, error)
 	Encrypt(ctx context.Context, keyHandle string, plaintext []byte) ([]byte, error)
 	Decrypt(ctx context.Context, keyHandle string, ciphertext []byte) ([]byte, error)

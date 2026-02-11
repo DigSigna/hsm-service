@@ -121,44 +121,19 @@ func (s *slotService) InitializeSlot(
 }
 
 func (s *slotService) initializeSlotInternal(slot uint, tenantID, pin string) (*entities.HSMSlot, error) {
-	// Cargar la biblioteca PKCS#11
-	p, err := initPKCS11(s.config.LibraryPath)
+	p, err := hsm.GetOrInitPKCS11Context(s.config.LibraryPath)
 	if err != nil {
 		return nil, fmt.Errorf(exceptions.DomainErrPKCS11LibraryNotFound.Error()+": %w", err)
 	}
 
-	defer p.Finalize()
-
-	// Inicializar el token usando PKCS#11
+	// Inicializar el token
 	label := helpers.GenerateTenantSlotLabel(tenantID)
 	err = p.InitToken(slot, s.config.Pin, label)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize token: %w", err)
 	}
 
-	// IMPORTANTE: Finalizar y re-inicializar el contexto PKCS#11
-	// Después de InitToken, SoftHSM genera un nuevo slot ID
-	// Debemos refrescar el contexto para ver el nuevo ID
-	p.Finalize()
-
-	p, err = initPKCS11(s.config.LibraryPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reload PKCS#11 after init: %w", err)
-	}
-	// defer ya está arriba, pero ahora tenemos nuevo contexto
-	err = p.Initialize()
-	if err != nil {
-		return nil, fmt.Errorf("PKCS#11 initialize failed: %w", err)
-	}
-
-	// Buscar el slot real usando el label
-	realSlotID, err := s.findSlotByLabel(p, label)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find initialized slot: %w", err)
-	}
-
-	// Ahora abrir sesión con el slot REAL
-	session, err := p.OpenSession(realSlotID, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+	session, err := p.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session: %w", err)
 	}
@@ -178,7 +153,7 @@ func (s *slotService) initializeSlotInternal(slot uint, tenantID, pin string) (*
 	p.Logout(session)
 
 	// create persisted HSMSlot record with encrypted PIN
-	hsmSlot, err := s.createHSMSlot(context.Background(), realSlotID, label, pin)
+	hsmSlot, err := s.createHSMSlot(context.Background(), slot, label, pin)
 	if err != nil {
 		return nil, err
 	}
@@ -287,26 +262,27 @@ func (s *slotService) createHSMSlot(
 }
 
 func (s *slotService) GetAllSlots(ctx context.Context) ([]uint, error) {
-	// Cargar la biblioteca PKCS#11
-	p, err := initPKCS11(s.config.LibraryPath)
+	// Get shared PKCS#11 context (singleton)
+	p, err := hsm.GetOrInitPKCS11Context(s.config.LibraryPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load PKCS#11 library: %w", err)
 	}
 
 	// get slots from pkcs11
-	slots, err := p.GetSlotList(true)
+	slots, err := p.GetSlotList(false)
 
 	return slots, nil
 }
 
 func (s *slotService) GetAvailableSlots(ctx context.Context) ([]uint, error) {
-	p, err := initPKCS11(s.config.LibraryPath)
+	// Get shared PKCS#11 context (singleton)
+	p, err := hsm.GetOrInitPKCS11Context(s.config.LibraryPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load PKCS#11 library: %w", err)
 	}
 
 	// Obtener slots reales
-	slots, err := p.GetSlotList(true) // true = solo slots con token presente
+	slots, err := p.GetSlotList(false) // true = solo slots con token presente
 	if err != nil {
 		return nil, fmt.Errorf("failed to get slot list: %w", err)
 	}
@@ -358,28 +334,27 @@ func (s *slotService) DeleteSlot(ctx context.Context, slot uint) (err error) {
 	return nil
 }
 
-func initPKCS11(libraryPath string) (*pkcs11.Ctx, error) {
-	p := pkcs11.New(libraryPath)
-	if p == nil {
-		return nil, fmt.Errorf("failed to load PKCS#11 library")
-	}
-	return p, nil
-}
-
-func (s *slotService) findSlotByLabel(p *pkcs11.Ctx, label string) (uint, error) {
+func (s *slotService) findRealSlotByLabel(p *pkcs11.Ctx, label string) (uint, error) {
+	// Get list of slots with tokens present
 	slots, err := p.GetSlotList(true)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get slot list: %w", err)
 	}
+
+	println("DEBUG: findSlotByLabel - Found", len(slots), "slots with tokens")
 
 	for _, slot := range slots {
 		tokenInfo, err := p.GetTokenInfo(slot)
 		if err != nil {
+			println("DEBUG: Failed to get token info for slot", slot, ":", err.Error())
 			continue
 		}
 
 		tokenLabel := strings.TrimSpace(tokenInfo.Label)
+		println("DEBUG: Checking slot", slot, "with label:", tokenLabel)
+
 		if tokenLabel == label {
+			println("DEBUG: MATCH! Found slot", slot, "with label:", label)
 			return uint(slot), nil
 		}
 	}

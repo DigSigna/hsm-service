@@ -8,7 +8,12 @@ type CreateKeyRequest struct {
 }
 
 type SignHashRequest struct {
-	KeyID    string `json:"key_id" binding:"required,uuid"`
-	Hash     string `json:"hash" binding:"required,base64"`
-	TenantID string `json:"tenant_id" binding:"required,uuid"`
+	KeyID string `json:"key_id" binding:"required,uuid"`
+	Hash  string `json:"hash" binding:"required,base64"`
+}
+
+type VerifySignatureRequest struct {
+	KeyID     string `json:"key_id" binding:"required,uuid"`
+	Hash      string `json:"hash" binding:"required,base64"`
+	Signature string `json:"signature" binding:"required,base64"`
 }

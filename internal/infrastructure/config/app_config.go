@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Environment string
-	Database    DatabaseConfig
-	Server      ServerConfig
-	HSM         HSMConfig
-	Redis       RedisConfig
-	Audit       AuditConfig
+	Environment   string
+	Database      DatabaseConfig
+	Server        ServerConfig
+	HSM           HSMConfig
+	Redis         RedisConfig
+	Audit         AuditConfig
+	AESKeyManager AESKeyManager
 }
 
 type DatabaseConfig struct {
@@ -72,6 +73,35 @@ type AuditHybridConfig struct {
 type CircuitBreakerConfig struct {
 	MaxFailures  int           `mapstructure:"max_failures"`
 	ResetTimeout time.Duration `mapstructure:"reset_timeout"`
+}
+
+type AESKeyManager struct {
+	Strategy string      `mapstructure:"strategy"`
+	Local    LocalConfig `mapstructure:"local"`
+	K8S      K8SConfig   `mapstructure:"k8s"`
+	Vault    VaultConfig `mapstructure:"vault"`
+}
+
+type LocalConfig struct {
+	MasterKey string `mapstructure:"master_key"`
+	KeyID     string `mapstructure:"key_id"`
+}
+type K8SConfig struct {
+	SecretName      string `mapstructure:"secret_name"`
+	SecretNamespace string `mapstructure:"secret_namespace"`
+	KeyID           string `mapstructure:"key_id"`
+	MasterKeyKey    string `mapstructure:"master_key_key"`
+	OldMasterKeyKey string `mapstructure:"old_master_key_key"`
+	KubeconfigPath  string `mapstructure:"kubeconfig_path"`
+	InCluster       bool   `mapstructure:"in_cluster"`
+}
+
+type VaultConfig struct {
+	Address    string `mapstructure:"address"`
+	Token      string `mapstructure:"token"`
+	SecretPath string `mapstructure:"secret_path"`
+	Path       string `mapstructure:"path"`
+	KeyName    string `mapstructure:"key_name"`
 }
 
 func (c *Config) IsAuditEnabled() bool {
@@ -155,4 +185,9 @@ func setDefaults() {
 	viper.SetDefault("audit.http.timeout", "5s")
 	viper.SetDefault("audit.hybrid.circuit_breaker.max_failures", 5)
 	viper.SetDefault("audit.hybrid.circuit_breaker.reset_timeout", "30s")
+
+	// AES Key Manager
+	viper.SetDefault("aeskeymanager.strategy", "local")
+	viper.SetDefault("aeskeymanager.local.master_key", "LLvxgXPJCEY1sek2eTNihV7laqAIVdQVxz11eYcA8oU=") // "mock_master_key_for_development" en base64
+	viper.SetDefault("aeskeymanager.local.key_id", "master-aes-key-v1")
 }

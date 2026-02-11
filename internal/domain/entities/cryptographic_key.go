@@ -30,7 +30,7 @@ type CryptographicKey struct {
 	KeyHandle        string                    `json:"key_handle"`
 	KeyLabel         string                    `json:"key_label"`
 	IsHardwareBacked bool                      `json:"is_hardware_backed"`
-	HSMSlot          int                       `json:"hsm_slot"`
+	HSMSlotID        string                    `json:"hsm_slot_id"`
 	IsActive         bool                      `json:"is_active"`
 	Version          int                       `json:"version"`
 	RotationDate     time.Time                 `json:"rotation_date,omitempty"`

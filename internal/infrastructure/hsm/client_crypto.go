@@ -11,8 +11,21 @@ import (
 	"github.com/miekg/pkcs11"
 )
 
+type contextKey string
+
+const (
+	tenantErrorMsg               = "error checking tenant existence"
+	keyNotFoundErrMsg            = "failed to find key with label '%s': %w"
+	tenantIDKey       contextKey = "tenant_id"
+)
+
 // SignHash signs a hash using the specified key
-func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []byte) (publicKey []byte, err error) {
+func (c *SoftHSMClient) SignHash(
+	ctx context.Context,
+	keyHandle string,
+	hash []byte,
+	identityContext *valueobjects.IdentityContext) (publicKey []byte, err error) {
+	ctx = context.WithValue(ctx, tenantIDKey, identityContext.TenantID)
 	start := time.Now()
 
 	defer func() {
@@ -26,6 +39,7 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 			ActorType:   "SERVICE",
 			DurationMs:  time.Since(start).Milliseconds(),
 			Metadata: map[string]any{
+				"handle":      keyHandle,
 				"hash_length": len(hash),
 			},
 		}
@@ -34,9 +48,11 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 		}
 	}()
 
-	handle, err := parseKeyHandle(keyHandle)
+	// Instead of parsing the keyHandle as a numeric handle (which is ephemeral),
+	// treat it as a label and search for the key in the current session
+	handle, err := c.findPrivateKeyByLabel(keyHandle)
 	if err != nil {
-		return nil, fmt.Errorf("invalid key handle '%s': %w", keyHandle, err)
+		return nil, fmt.Errorf(keyNotFoundErrMsg, keyHandle, err)
 	}
 
 	c.mutex.RLock()
@@ -46,12 +62,12 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 		return nil, errors.New(hsmClosedMsg)
 	}
 
-	// Verificar que la clave existe
+	// Verify key exists and is accessible (optional check, findPrivateKeyByLabel already does this)
 	_, err = c.ctx.GetAttributeValue(c.session, handle, []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, nil),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("key with handle '%s' not found in HSM: %w", keyHandle, err)
+		return nil, fmt.Errorf("key with label '%s' not accessible: %w", keyHandle, err)
 	}
 
 	// Determine mechanism based on key type
@@ -70,18 +86,88 @@ func (c *SoftHSMClient) SignHash(ctx context.Context, keyHandle string, hash []b
 	return signature, nil
 }
 
-func (c *SoftHSMClient) VerifySignature(ctx context.Context, keyHandle string, hash, signature []byte) (bool, error) {
-	// Para verificación, necesitamos la clave pública
-	// En una implementación real, buscaríamos la clave pública correspondiente
-	// Por ahora, devolvemos true para testing
+func (c *SoftHSMClient) VerifySignature(ctx context.Context, keyHandle string, hash, signature []byte) (isValid bool, err error) {
+	start := time.Now()
+
+	defer func() {
+		data := valueobjects.AuditData{
+			ServiceName: "soft-hsm-client",
+			EventType:   "HSM_OPERATION",
+			Operation:   "VERIFY_SIGNATURE",
+			Success:     err == nil,
+			ErrMsg:      errToString(err),
+			StatusCode:  exceptions.GetCode(err),
+			ActorType:   "SERVICE",
+			DurationMs:  time.Since(start).Milliseconds(),
+			Metadata: map[string]any{
+				"handle":           keyHandle,
+				"hash_length":      len(hash),
+				"signature_length": len(signature),
+				"is_valid":         isValid,
+			},
+		}
+		if c.auditDispatcher != nil {
+			c.auditDispatcher.AuditOperation(ctx, data, nil)
+		}
+	}()
+
+	// Find the public key by label (persistent identifier)
+	handle, err := c.findPublicKeyByLabel(keyHandle)
+	if err != nil {
+		return false, fmt.Errorf(keyNotFoundErrMsg, keyHandle, err)
+	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c.closed {
+		return false, errors.New(hsmClosedMsg)
+	}
+
+	// Verify key exists and is accessible
+	_, err = c.ctx.GetAttributeValue(c.session, handle, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, nil),
+	})
+	if err != nil {
+		return false, fmt.Errorf("public key with label '%s' not accessible: %w", keyHandle, err)
+	}
+
+	// Determine mechanism based on key type (matching SignHash)
+	mechanism := pkcs11.NewMechanism(pkcs11.CKM_SHA256_RSA_PKCS, nil)
+
+	if err := c.ctx.VerifyInit(c.session, []*pkcs11.Mechanism{mechanism}, handle); err != nil {
+		return false, fmt.Errorf("failed to initialize verification operation: %w", err)
+	}
+
+	err = c.ctx.Verify(c.session, hash, signature)
+	if err != nil {
+		// If verification fails, check if it's because signature is invalid
+		// or because of an actual error
+		pkcs11Err, ok := err.(pkcs11.Error)
+		if ok && pkcs11Err == pkcs11.CKR_SIGNATURE_INVALID {
+			// Signature is invalid, but this is not an error condition
+			return false, nil
+		}
+		// Actual error occurred during verification
+		return false, fmt.Errorf("failed to verify signature: %w", err)
+	}
+
+	// Verification successful
 	return true, nil
 }
 
 func (c *SoftHSMClient) Encrypt(ctx context.Context, keyHandle string, plaintext []byte) ([]byte, error) {
-	var handle pkcs11.ObjectHandle
-	_, err := fmt.Sscanf(keyHandle, "%d", &handle)
+	// Find the public key by label (persistent identifier)
+	handle, err := c.findPublicKeyByLabel(keyHandle)
 	if err != nil {
-		return nil, fmt.Errorf(invalidKeyMsg+": %w", err)
+		return nil, fmt.Errorf(keyNotFoundErrMsg, keyHandle, err)
+	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c.closed {
+		return nil, errors.New(hsmClosedMsg)
 	}
 
 	// Usar mecanismo RSA PKCS para encriptación
@@ -89,22 +175,29 @@ func (c *SoftHSMClient) Encrypt(ctx context.Context, keyHandle string, plaintext
 
 	err = c.ctx.EncryptInit(c.session, []*pkcs11.Mechanism{mechanism}, handle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize encryption: %w", err)
 	}
 
 	ciphertext, err := c.ctx.Encrypt(c.session, plaintext)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encrypt: %w", err)
 	}
 
 	return ciphertext, nil
 }
 
 func (c *SoftHSMClient) Decrypt(ctx context.Context, keyHandle string, ciphertext []byte) ([]byte, error) {
-	var handle pkcs11.ObjectHandle
-	_, err := fmt.Sscanf(keyHandle, "%d", &handle)
+	// Find the private key by label (persistent identifier)
+	handle, err := c.findPrivateKeyByLabel(keyHandle)
 	if err != nil {
-		return nil, fmt.Errorf(invalidKeyMsg+": %w", err)
+		return nil, fmt.Errorf(keyNotFoundErrMsg, keyHandle, err)
+	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c.closed {
+		return nil, errors.New(hsmClosedMsg)
 	}
 
 	// Usar mecanismo RSA PKCS para desencriptación
@@ -112,12 +205,12 @@ func (c *SoftHSMClient) Decrypt(ctx context.Context, keyHandle string, ciphertex
 
 	err = c.ctx.DecryptInit(c.session, []*pkcs11.Mechanism{mechanism}, handle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize decryption: %w", err)
 	}
 
 	plaintext, err := c.ctx.Decrypt(c.session, ciphertext)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
 	}
 
 	return plaintext, nil

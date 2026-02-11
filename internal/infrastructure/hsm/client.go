@@ -30,51 +30,61 @@ var _ output.HSMClient = (*SoftHSMClient)(nil)
 func NewSoftHSMClient(modulePath, pin string, slot uint, auditDispatcher output.AuditEventDispatcher) (*SoftHSMClient, error) {
 	log.Printf("DEBUG: Initializing SoftHSMClient with module: %s, slot: %d", modulePath, slot)
 
-	ctx := pkcs11.New(modulePath)
-	if ctx == nil {
-		return nil, fmt.Errorf("failed to load PKCS#11 module")
-	}
-
-	if err := ctx.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to initialize PKCS#11: %v", err)
-	}
-
-	slots, err := ctx.GetSlotList(true)
+	// Get or initialize the shared PKCS#11 context (singleton)
+	// This ensures Initialize() is called only once per process
+	ctx, err := GetOrInitPKCS11Context(modulePath)
 	if err != nil {
-		ctx.Finalize()
+		return nil, fmt.Errorf("failed to get PKCS#11 context: %w", err)
+	}
+
+	// Verify slots are available
+	slots, err := ctx.GetSlotList(false)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get slots: %v", err)
 	}
 
 	log.Printf("DEBUG: Found %d slots", len(slots))
 
 	if len(slots) == 0 {
-		ctx.Finalize()
 		return nil, fmt.Errorf("no PKCS#11 slots available")
 	}
 
 	// Usar slot especificado o default
-	targetSlot := slots[0]
-	if slot < uint(len(slots)) {
-		targetSlot = slots[slot]
-	}
+	// targetSlot := slot
 
-	log.Printf("DEBUG: Using slot ID: 0x%x", targetSlot)
+	log.Printf("DEBUG: Slot number: %d", slot)
+	log.Printf("DEBUG: Slot PIN: %s", pin)
+	log.Printf("DEBUG: Using slot ID: 0x%x", slot)
 
-	session, err := ctx.OpenSession(targetSlot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+	// Open session with retry logic for concurrent access
+	session, err := ctx.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
-		ctx.Finalize()
-		return nil, fmt.Errorf("failed to open session: %v", err)
+		return nil, fmt.Errorf("failed to open session on slot %d: %w", slot, err)
 	}
 
-	// Login
-	err = ctx.Login(session, pkcs11.CKU_USER, pin)
-	if err != nil && err != pkcs11.Error(pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+	// Get session info to check if user is already logged in
+	sessionInfo, err := ctx.GetSessionInfo(session)
+	if err != nil {
 		ctx.CloseSession(session)
-		ctx.Finalize()
-		return nil, fmt.Errorf("failed to login: %v", err)
+		return nil, fmt.Errorf("failed to get session info for slot %d: %w", slot, err)
 	}
 
-	log.Printf("DEBUG: Login successful or already logged in")
+	// Only login if not already logged in
+	// CKS_RO_USER_FUNCTIONS or CKS_RW_USER_FUNCTIONS means user is logged in
+	needsLogin := sessionInfo.State != pkcs11.CKS_RO_USER_FUNCTIONS &&
+		sessionInfo.State != pkcs11.CKS_RW_USER_FUNCTIONS
+
+	if needsLogin {
+		log.Printf("DEBUG: Attempting login for slot %d with PIN", slot)
+		err = ctx.Login(session, pkcs11.CKU_USER, pin)
+		if err != nil && err != pkcs11.Error(pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+			ctx.CloseSession(session)
+			return nil, fmt.Errorf("failed to login to slot %d: %w", slot, err)
+		}
+		log.Printf("DEBUG: Login successful for slot %d", slot)
+	} else {
+		log.Printf("DEBUG: User already logged in for slot %d, skipping login", slot)
+	}
 
 	client := &SoftHSMClient{
 		ctx:             ctx,
@@ -130,10 +140,15 @@ func (c *SoftHSMClient) Close() error {
 	var errs []error
 
 	if c.ctx != nil {
+		// Logout from the session
 		_ = c.ctx.Logout(c.session)
+
+		// Close the session for this specific slot
 		_ = c.ctx.CloseSession(c.session)
-		_ = c.ctx.Finalize()
-		c.ctx.Destroy()
+
+		// DO NOT call Finalize() or Destroy() here - the context is shared!
+		// The singleton context should only be finalized during application shutdown
+		// by calling FinalizePKCS11Context() from the HSMManager.CloseAll()
 	}
 
 	log.Printf("INFO: SoftHSMClient closed successfully")

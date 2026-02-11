@@ -66,7 +66,7 @@ func (s *signingService) SignHash(
 		start:           time.Now(),
 		inputSize:       len(hash),
 	}
-	defer s.auditAndTrackOperation(ctx, &err, opCtx, "SIGN_HASH")
+	defer s.auditAndTrackOperation(ctx, &err, opCtx, "SIGN")
 
 	// Validate key and get slot
 	key, slot, err := s.validateKeyAndGetSlot(ctx, keyID, identityContext.TenantID, valueobjects.KeyUsageSigning)

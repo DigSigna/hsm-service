@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hsm-service/internal/domain/exceptions"
 	"hsm-service/internal/domain/valueobjects"
-	"strconv"
 	"time"
 
 	"github.com/miekg/pkcs11"
@@ -82,8 +81,9 @@ func (c *SoftHSMClient) GenerateKeyPair(ctx context.Context, algorithm valueobje
 		return nil, "", err
 	}
 
-	// keyHandle = fmt.Sprintf("%d", privHandle)
-	keyHandle = strconv.FormatUint(uint64(privHandle), 10)
+	// Return the label as the key identifier (persistent across sessions)
+	// NOT the handle (which is ephemeral and only valid in current session)
+	keyHandle = label
 
 	return publicKey, keyHandle, nil
 }
