@@ -6,10 +6,58 @@ meta {
 
 post {
   url: {{baseUrl}}/api/v1/keys/sign
-  body: none
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "key_id" : "e5e38749-1b79-4ede-99ec-04557c9de11f",
+    "Hash" : "aWRlbnRpdHlDb250ZXh0ICp2YWx1ZW9iamVjdHMuSWRlbnRpdHlDb250ZXh0"
+  }
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Final User Sign
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys/sign
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "key_id" : "db583b64-24fd-402c-aa52-2b018a6a2d9d",
+        "Hash" : "aWRlbnRpdHlDb250ZXh0ICp2YWx1ZW9iamVjdHMuSWRlbnRpdHlDb250ZXh0"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 8c825589-95ca-42c5-9b50-786002646a17
+      date: Mon, 09 Feb 2026 20:05:33 GMT
+      content-length: 408
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "key_id": "db583b64-24fd-402c-aa52-2b018a6a2d9d",
+          "signature": "W3J28fOL+nZ5Lqkv1/sLx8x+NfoB+sLQiwffWWajRIwUXQ7DfMQHH9Bx1nf0iDK8zUfg3QZYXjn7+ztxwGpGRqgoQWqkmsFx7eL4XPahGN4VnEIOh2NP1yU/FtzDbk54VLFW+WzXUfYTckTOu4QJ9rXn9py3jgjb6RTyXnLrOQUfeC4ca8y3M0mDR27DQBBNTBf6cQSSEDBeuPwG5SXjgtA8u3zlLwf71Rdbkx4l3ouxfF9jM5oQipCwGMRnikaOj4yHagWFFI5qD0bGdrXD0owXBPugulz13ljTkrsHq2fz6ADZPd8Ni3iQZPle+4DD5MKBjmkew2ttYSBVUR+XQA=="
+        }
+      '''
+    }
+  }
 }

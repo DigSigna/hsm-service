@@ -22,48 +22,7 @@ settings {
 }
 
 example {
-  name: New Tenant Slot Initialized
-  
-  request: {
-    url: {{baseUrl}}/internal/hsm/slots/initialize
-    method: POST
-    mode: json
-    body:json: {
-      {
-        "tenant_id": "00000000-0000-0000-0000-000000000002",
-        "pin" : "1234"
-      }
-    }
-  }
-  
-  response: {
-    headers: {
-      content-type: application/json; charset=utf-8
-      x-request-id: 1676007b-6db0-4ffb-a0ed-415907535e7a
-      date: Tue, 13 Jan 2026 23:09:54 GMT
-      content-length: 111
-    }
-  
-    status: {
-      code: 201
-      text: Created
-    }
-  
-    body: {
-      type: json
-      content: '''
-        {
-          "message": "Slot initialized successfully",
-          "slot": 244916627,
-          "tenant_id": "00000000-0000-0000-0000-000000000002"
-        }
-      '''
-    }
-  }
-}
-
-example {
-  name: White-label slot initialiting
+  name: Init slot to reseller
   
   request: {
     url: {{baseUrl}}/internal/hsm/slots/initialize
@@ -79,9 +38,9 @@ example {
   response: {
     headers: {
       content-type: application/json; charset=utf-8
-      x-request-id: 3f684b43-8482-40dd-8ae1-7cc58e30fad0
-      date: Thu, 22 Jan 2026 21:27:01 GMT
-      content-length: 112
+      x-request-id: aa86742a-6e8f-4ac4-a344-89b28f66a127
+      date: Fri, 06 Feb 2026 19:50:41 GMT
+      content-length: 140
     }
   
     status: {
@@ -94,7 +53,7 @@ example {
       content: '''
         {
           "message": "Slot initialized successfully",
-          "slot": 1775442218,
+          "slot": "9f410553-1a28-45ea-8763-9301597ed109",
           "tenant_id": "30000000-3000-3000-3000-000000000001"
         }
       '''
