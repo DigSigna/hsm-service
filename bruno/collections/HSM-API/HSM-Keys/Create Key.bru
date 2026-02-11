@@ -1,0 +1,265 @@
+meta {
+  name: Create Key
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/keys
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "white-label-reseller-tenant-key-002",
+    "key_size": 2048,
+    "algorithm": "RSA",
+    "usage": "SIGNING"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Key Base DigSigna Tenant
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "tenant-root-key-DS-001",
+        "key_size": 2048,
+        "algorithm": "RSA",
+        "usage": "SIGNING"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: d6bd1e9d-c325-4483-96e9-14ab3b45c8d4
+      date: Wed, 21 Jan 2026 21:20:54 GMT
+      content-length: 233
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "algorithm": "RSA",
+          "created_at": "0001-01-01T00:00:00Z",
+          "id": "51107bfb-100e-4f4c-a372-71bf1e2b3320",
+          "is_active": true,
+          "key_size": 2048,
+          "name": "tenant-root-key-DS-001",
+          "tenant_id": "00000000-0000-0000-0000-000000000001",
+          "usage": "SIGNING"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: Key Mpi Cel Base
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "tenant-root-key-MpiCel-001",
+        "key_size": 2048,
+        "algorithm": "RSA",
+        "usage": "SIGNING"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 95096984-e357-4d04-9f99-89ac732c1b4e
+      date: Wed, 21 Jan 2026 23:16:21 GMT
+      content-length: 237
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "algorithm": "RSA",
+          "created_at": "0001-01-01T00:00:00Z",
+          "id": "1129e10e-c4b4-4370-a15f-58473779c95d",
+          "is_active": true,
+          "key_size": 2048,
+          "name": "tenant-root-key-MpiCel-001",
+          "tenant_id": "20000000-2000-2000-2000-000000000001",
+          "usage": "SIGNING"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: Key Mpio Cel Dep DU
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "dep-DU-key-MpiCel-001",
+        "key_size": 2048,
+        "algorithm": "RSA",
+        "usage": "SIGNING"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 7ea4bda8-c6b4-4717-9687-63692422fee0
+      date: Thu, 22 Jan 2026 20:24:36 GMT
+      content-length: 232
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "algorithm": "RSA",
+          "created_at": "0001-01-01T00:00:00Z",
+          "id": "d61644d6-a6c6-4d9a-9eed-8739bb413a9c",
+          "is_active": true,
+          "key_size": 2048,
+          "name": "dep-DU-key-MpiCel-001",
+          "tenant_id": "20000000-2000-2000-2000-000000000001",
+          "usage": "SIGNING"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: Key Mpio Cel Dep DU Dir User
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "dep-DU-dir-key-MpiCel-001",
+        "key_size": 2048,
+        "algorithm": "RSA",
+        "usage": "SIGNING"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 4ad03fde-01d8-42a2-a742-bb91e9e38eda
+      date: Thu, 22 Jan 2026 20:31:01 GMT
+      content-length: 236
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "algorithm": "RSA",
+          "created_at": "0001-01-01T00:00:00Z",
+          "id": "af1164d8-6d3e-4804-98c8-fc74316d9aa7",
+          "is_active": true,
+          "key_size": 2048,
+          "name": "dep-DU-dir-key-MpiCel-001",
+          "tenant_id": "20000000-2000-2000-2000-000000000001",
+          "usage": "SIGNING"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: Key Base Reseller
+  
+  request: {
+    url: {{baseUrl}}/api/v1/keys
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "white-label-reseller-tenant-key-001",
+        "key_size": 2048,
+        "algorithm": "RSA",
+        "usage": "SIGNING"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: 3842e909-ed4e-41b4-a52c-6ce0af3f5d28
+      date: Thu, 22 Jan 2026 21:29:13 GMT
+      content-length: 246
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "algorithm": "RSA",
+          "created_at": "0001-01-01T00:00:00Z",
+          "id": "211ad9f1-06ef-4f62-8906-03c7f216d8ba",
+          "is_active": true,
+          "key_size": 2048,
+          "name": "white-label-reseller-tenant-key-001",
+          "tenant_id": "30000000-3000-3000-3000-000000000001",
+          "usage": "SIGNING"
+        }
+      '''
+    }
+  }
+}

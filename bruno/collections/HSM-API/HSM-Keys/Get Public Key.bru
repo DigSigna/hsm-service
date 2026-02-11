@@ -1,0 +1,50 @@
+meta {
+  name: Get Public Key
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/keys/af1164d8-6d3e-4804-98c8-fc74316d9aa7/public-key
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+example {
+  name: Public Key
+  
+  request: {
+    url: {{baseUrl}}/api/v1/public/keys/8a03326b-f0d4-11f0-a9b3-8ef7b049c9db/public-key
+    method: GET
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      content-type: application/json; charset=utf-8
+      x-request-id: ac291c32-bf7d-48cb-bd81-a7eebc97acf3
+      date: Tue, 13 Jan 2026 23:08:58 GMT
+      content-length: 457
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "key_id": "8a03326b-f0d4-11f0-a9b3-8ef7b049c9db",
+          "public_key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn8FTljzYnPHUcfFcuYF110/joG6sTNxc8VEaXjIAbKAdj30dvrN8N2y906M/DhH9egdI6JugJVlPjpLXucpT+pcjL20MorgAEGUFDIiMTvknGRJ0sA5w2c5qSCesYlYvRCAA3f4LSZxrWVvdB23NDkbuV0e1M5j1AtbYmv1+rSl2gn42lfEVYfRT4rMV9gGTUHdQZD0xfN2slLfIgLlS7fCZPBkBCPeMi6FQqKBy2SIuVB0u4f0M5lWy0t7JwLr3UE1xGyA75uBmWXN1bv5ucOVHoorT1Bo6HKJ/bFVA6t58WzCHlAyHuKu3uW8ZPuety4HNsqLCl9GWI4uw0di2EQIDAQAB"
+        }
+      '''
+    }
+  }
+}

@@ -11,8 +11,9 @@ const (
 type KeyType string
 
 const (
-	KeyTypeRSA   KeyType = "RSA"
-	KeyTypeECDSA KeyType = "ECDSA"
+	KeyTypeRSA     KeyType = "RSA"
+	KeyTypeECDSA   KeyType = "ECDSA"
+	KeyTypeUnknown KeyType = "UNKNOWN"
 )
 
 // Métodos de utilidad

@@ -31,9 +31,9 @@ type ValidateTokenRequest struct {
 
 // ValidateTokenResponse DTO para respuesta de validación
 type ValidateTokenResponse struct {
-	Valid      bool     `json:"valid"`
-	SessionID  string   `json:"session_id,omitempty"`
-	UserID     string   `json:"user_id,omitempty"`
-	TenantID   string   `json:"tenant_id,omitempty"`
+	Valid       bool     `json:"valid"`
+	SessionID   string   `json:"session_id,omitempty"`
+	UserID      string   `json:"user_id,omitempty"`
+	TenantID    string   `json:"tenant_id,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
 }

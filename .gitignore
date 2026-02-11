@@ -18,3 +18,8 @@ certs/
 
 # config
 config/
+
+#tokens
+tokens.txt
+tool-commands.txt
+aes-key.txt
