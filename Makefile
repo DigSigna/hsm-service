@@ -12,7 +12,7 @@ SOURCE = ./cmd/api
 DOCKER_COMPOSE_DEV = docker-compose -f docker-compose.dev.yml
 
 
-.PHONY: sonar-up sonar-down sonar-local test coverage lint quality dev dev-up dev-down dev-logs dev-restart dev-shell test dev-keys dev-jwt dev-restart dev-jwt-export
+.PHONY: sonar-up sonar-down sonar-local test coverage lint quality dev dev-up dev-down dev-logs dev-restart dev-shell test dev-keys dev-jwt dev-restart dev-jwt-export dev-aes-key dev-aes-encrypt
 
 # SonarQube Local
 sonar-up:
@@ -173,6 +173,13 @@ dev-jwt:
 dev-jwt-export:
 	go run scripts/generate-jwt/main.go > tokens.txt
 
+dev-aes-key:
+	@echo "Generando clave AES de desarrollo..."
+	go run scripts/generate-aes-key/main.go
+
+dev-aes-encrypt:
+	@echo "Encriptando datos de desarrollo..."
+	go run scripts/aes-cryptografy/main.go
 # test-jwt:
 # 	@echo "🧪 Probando validación JWT..."
 # 	curl -H "Authorization: Bearer $(shell cat .token.dev)" http://localhost:8080/api/v1/keys

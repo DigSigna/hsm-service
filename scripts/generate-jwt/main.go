@@ -53,20 +53,21 @@ type TokenConfig struct {
 const (
 	depPublicKey = "dev-key"
 	rootTenantId = "00000000-0000-0000-0000-000000000001"
-	devKeyRootId = "6f3b7dee-8c92-465b-ae33-a65498983f9f"
+	devKeyRootId = "e9195d89-0d7a-4c60-b759-580c714f1fe9" //crypto key id
 	rootUserId   = "00000000-0000-0000-0000-000000000001"
 
 	celayaTenantId          = "20000000-2000-2000-2000-000000000001"
 	celayaOrganizationId    = "20000000-2000-2000-2000-000000000011"
-	devKeyCelayaTenantId    = "1129e10e-c4b4-4370-a15f-58473779c95d"
+	devKeyCelayaTenantId    = "c78fcdc4-ac80-4ef4-a210-143f4cd48782" //crypto key id
 	celayaTenantUserId      = "20000000-2000-2000-2000-000000000101"
 	celayaDepOrganizationId = "20000000-2000-2000-2000-000000000012"
-	devKeyCelayaDepId       = "d61644d6-a6c6-4d9a-9eed-8739bb413a9c"
+	devKeyCelayaDepId       = "8535ffc9-0d23-4e55-8b0d-1ef91d37e950" //crypto key id
 	celayaDepUserId         = "20000000-2000-2000-2000-000000000103"
 	celayaDirDepUserId      = "20000000-2000-2000-2000-000000000102"
 
 	resellerTenantId = "30000000-3000-3000-3000-000000000001"
 	resellerUserId   = "30000000-3000-3000-3000-000000000001"
+	resellerDevKeyID = "17157e7e-24b2-4473-97db-6104762085e7"
 )
 
 func main() {
