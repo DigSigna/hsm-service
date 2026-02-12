@@ -129,9 +129,9 @@ func main() {
 		slotStorage)
 	// Auth setup (JWT validation)
 	authConfig := &auth.Config{
-		Mode:             cfg.Environment, // "development" o "production"
-		PublicKeyPath:    "certs/public.pem",
-		JWKSUrl:          "", // Opcional: para producción con identity service
+		Mode:             cfg.Auth.Mode, // "development" o "production"
+		PublicKeyPath:    cfg.Auth.PublicKeyPath,
+		JWKSUrl:          cfg.Auth.JWKSUrl, // Opcional: para producción con identity service
 		JWKSCacheMinutes: 60,
 	}
 

@@ -53,13 +53,12 @@ func NewKeyManager(config *Config) (*KeyManager, error) {
 }
 
 func (km *KeyManager) loadInitialKeys() error {
-	// if km.config.Mode == "development" {
-	// return km.loadFromPEMFile(km.config.PublicKeyPath, "dev-key")
-	return km.loadFromPEMFile("./certs/public.pem", "dev-key")
-	// }
+	if km.config.Mode == "development" {
+		return km.loadFromPEMFile(km.config.PublicKeyPath, "dev-key")
+	}
 
 	// En producción, cargar desde JWKS
-	// return km.fetchJWKS()
+	return km.fetchJWKS()
 }
 
 func (km *KeyManager) loadFromPEMFile(filepath, keyID string) error {
@@ -148,12 +147,12 @@ func (km *KeyManager) fetchJWKS() error {
 func (km *KeyManager) GetPublicKey(kid string) (*rsa.PublicKey, error) {
 	println("Getting public key for KID:", kid)
 	// Si estamos en modo producción y el caché está expirado, refrescar
-	// if km.config.Mode == "production" && time.Since(km.lastFetch) > km.cacheTime {
-	// 	if err := km.fetchJWKS(); err != nil {
-	// 		// Log error pero continuar con claves cacheadas
-	// 		fmt.Printf("Warning: failed to refresh JWKS: %v\n", err)
-	// 	}
-	// }
+	if km.config.Mode == "production" && time.Since(km.lastFetch) > km.cacheTime {
+		if err := km.fetchJWKS(); err != nil {
+			// Log error pero continuar con claves cacheadas
+			fmt.Printf("Warning: failed to refresh JWKS: %v\n", err)
+		}
+	}
 
 	km.mu.RLock()
 	key, exists := km.keys[kid]

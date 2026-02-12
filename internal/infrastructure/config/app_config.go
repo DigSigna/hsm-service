@@ -17,6 +17,7 @@ type Config struct {
 	Redis         RedisConfig
 	Audit         AuditConfig
 	AESKeyManager AESKeyManager
+	Auth          AuthConfig
 }
 
 type DatabaseConfig struct {
@@ -102,6 +103,13 @@ type VaultConfig struct {
 	SecretPath string `mapstructure:"secret_path"`
 	Path       string `mapstructure:"path"`
 	KeyName    string `mapstructure:"key_name"`
+}
+
+type AuthConfig struct {
+	Mode             string `mapstructure:"mode"`
+	PublicKeyPath    string `mapstructure:"public_key_path"`
+	JWKSUrl          string `mapstructure:"jwks_url"`
+	JWKSCacheMinutes int    `mapstructure:"jwks_cache_minutes"`
 }
 
 func (c *Config) IsAuditEnabled() bool {
@@ -190,4 +198,10 @@ func setDefaults() {
 	viper.SetDefault("aeskeymanager.strategy", "local")
 	viper.SetDefault("aeskeymanager.local.master_key", "LLvxgXPJCEY1sek2eTNihV7laqAIVdQVxz11eYcA8oU=") // "mock_master_key_for_development" en base64
 	viper.SetDefault("aeskeymanager.local.key_id", "master-aes-key-v1")
+
+	// Auth
+	viper.SetDefault("auth.mode", "development")
+	viper.SetDefault("auth.public_key_path", "./certs/public.pem")
+	viper.SetDefault("auth.jwks_url", "http://localhost:8080/.well-known/jwks.json")
+	viper.SetDefault("auth.jwks_cache_minutes", 60)
 }
