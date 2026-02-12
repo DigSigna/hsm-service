@@ -260,7 +260,7 @@ func createAESKeyManager(cfg *config.Config, audit output.AuditEventDispatcher) 
 			SecretName:      cfg.AESKeyManager.K8S.SecretName,
 			SecretNamespace: cfg.AESKeyManager.K8S.SecretNamespace,
 			MasterKeyKey:    cfg.AESKeyManager.K8S.MasterKeyKey,
-			OldMasterKeyKey: cfg.AESKeyManager.K8S.MasterKeyKey,
+			OldMasterKeyKey: cfg.AESKeyManager.K8S.OldMasterKeyKey,
 			InCluster:       cfg.AESKeyManager.K8S.InCluster,
 			KubeconfigPath:  cfg.AESKeyManager.K8S.KubeconfigPath,
 		},

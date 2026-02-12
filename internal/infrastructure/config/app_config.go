@@ -147,6 +147,9 @@ func LoadConfig() *Config {
 	// 	log.Printf("Config file not found, using environment variables and defaults: %v", err)
 	// }
 
+	viper.BindEnv("aeskeymanager.k8s.in_cluster")
+	viper.BindEnv("aeskeymanager.k8s.kubeconfig_path")
+
 	// Valores por defecto
 	setDefaults()
 
@@ -198,6 +201,8 @@ func setDefaults() {
 	viper.SetDefault("aeskeymanager.strategy", "local")
 	viper.SetDefault("aeskeymanager.local.master_key", "LLvxgXPJCEY1sek2eTNihV7laqAIVdQVxz11eYcA8oU=") // "mock_master_key_for_development" en base64
 	viper.SetDefault("aeskeymanager.local.key_id", "master-aes-key-v1")
+	viper.SetDefault("aeskeymanager.k8s.in_cluster", true)
+	viper.SetDefault("aeskeymanager.k8s.kubeconfig_path", "")
 
 	// Auth
 	viper.SetDefault("auth.mode", "development")
