@@ -44,6 +44,7 @@ const (
 	ErrWrappingKeyShort       ErrorCode = "WRAPPING_KEY_TOO_SHORT"
 	ErrKeyToWrapLengthInvalid ErrorCode = "KEY_TO_WRAP_INVALID_LENGTH"
 	ErrK8sSecretNotFound      ErrorCode = "K8S_SECRET_NOT_FOUND"
+	ErrK8sKeyNotFound         ErrorCode = "K8S_KEY_NOT_FOUND"
 	ErrFailWrapKey            ErrorCode = "FAIL_WRAP_KEY"
 	ErrFailUUnwrapKey         ErrorCode = "FAIL_UNWRAP_KEY"
 	ErrFailCreateAESKey       ErrorCode = "FAIL_CREATE_AES_KEY"
@@ -152,6 +153,7 @@ var (
 	DomainErrWrappingKeyShort       = NewDomainError(ErrWrappingKeyShort, "The wrapping key is too short")
 	DomainErrKeyToWrapLengthInvalid = NewDomainError(ErrKeyToWrapLengthInvalid, "The key to wrap length is invalid")
 	DomainErrK8sSecretNotFound      = NewDomainError(ErrK8sSecretNotFound, "The Kubernetes secret was not found")
+	DomainErrK8sKeyNotFound         = NewDomainError(ErrK8sKeyNotFound, "The key was not found in Kubernetes secret")
 	DomainErrFailWrapKey            = NewDomainError(ErrFailWrapKey, "Failed to wrap the key")
 	DomainErrFailUUnwrapKey         = NewDomainError(ErrFailUUnwrapKey, "Failed to unwrap the key")
 	DomainErrFailCreateAESKey       = NewDomainError(ErrFailCreateAESKey, "Failed to create AES key")

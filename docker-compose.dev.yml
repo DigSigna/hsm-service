@@ -1,4 +1,3 @@
-# docker-compose.yml
 version: '3.8'
 
 services:
@@ -6,8 +5,6 @@ services:
   # SoftHSM (simulando el sidecar)
   softhsm:
     image: ghcr.io/digsigna/softhsm/softhsm:latest
-    # O usar una imagen local si la tienes
-    # build: ./softhsm-docker
     volumes:
       - hsm_tokens:/var/lib/softhsm/tokens
       - ./config/softhsm2.conf:/etc/softhsm2.conf
@@ -39,9 +36,8 @@ services:
   hsm-service:
     build:
       context: .
-      dockerfile: Dockerfile.dev  # Usar Dockerfile especial para dev
+      dockerfile: Dockerfile.dev 
     environment:
-      # Variables de entorno (similar a k8s)
       HSM_ENVIRONMENT: development
       DATABASE_URL: "digsigna:AVNS_AoW9SVzq5lhLK5YhFzm@tcp(bitacoradigital-database-dec-26-backup-do-user-7050795-0.b.db.ondigitalocean.com:25060)/digsigna?tls=true&timeout=30s&parseTime=true"
       SOFTHSM2_CONF: "/etc/softhsm2.conf"
@@ -49,8 +45,23 @@ services:
       HSM_TOKEN_LABEL: "digsigna-token"
       HSM_PIN: "1234"
       HSM_SLOT: "0"
-      # Para desarrollo
       GIN_MODE: debug
+
+       # AES Key Manager (emular K8s desde local)
+      HSM_AESKEYMANAGER_STRATEGY: "k8s"
+      HSM_AESKEYMANAGER_K8S_IN_CLUSTER: "false"
+      HSM_AESKEYMANAGER_K8S_KUBECONFIG_PATH: "/root/.kube/config"
+      HSM_AESKEYMANAGER_K8S_SECRET_NAME: "hsm-secrets"
+      HSM_AESKEYMANAGER_K8S_SECRET_NAMESPACE: "default"
+      HSM_AESKEYMANAGER_K8S_KEY_ID: "master-aes-key-v1"
+      HSM_AESKEYMANAGER_K8S_MASTER_KEY_KEY: "master-aes-key-v1"
+      HSM_AESKEYMANAGER_K8S_OLD_MASTER_KEY_KEY: "master-key-old"
+
+      # Auth (local dev)
+      HSM_AUTH_MODE: "development"
+      HSM_AUTH_PUBLIC_KEY_PATH: "/app/certs/public.pem"
+      HSM_AUTH_JWKS_URL: "http://localhost:8080/.well-known/jwks.json"
+      HSM_AUTH_JWKS_CACHE_MINUTES: "60"
     volumes:
       # Montar el código fuente para hot reload
       - .:/app
@@ -62,20 +73,17 @@ services:
       # - ./config/config.yaml:/app/config.yaml
       - ./config/config.yaml:/app/config.yaml
       # - ./config/hsm-service-config.yaml:/root/config/config.yaml
+      - C:\Users\backups\.kube\config-docker.yaml:/root/.kube/config:ro
+      - C:\Users\backups\.minikube:/root/.minikube:ro
     ports:
       - "8080:8080"
       - "2345:2345"  # Para debugging con delve
     depends_on:
-      # mysql:
-      #   condition: service_healthy
-      # redis:
-      #   condition: service_started
       softhsm:
         condition: service_started
     command: air -c .air.toml
     networks:
       - hsm-network
-    # Health check opcional
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

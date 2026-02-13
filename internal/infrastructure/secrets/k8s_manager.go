@@ -31,6 +31,13 @@ type K8sAESKeyManager struct {
 var _ output.AESKeyManager = (*K8sAESKeyManager)(nil)
 
 func NewK8SAESKeyManager(config K8SConfig) (*K8sAESKeyManager, error) {
+	println("DEBUG: Initializing K8sAESKeyManager with config KEYID:", config.KeyID)
+	println("DEBUG: K8sAESKeyManager InCluster:", config.InCluster)
+	println("DEBUG: K8sAESKeyManager KubeconfigPath:", config.KubeconfigPath)
+	println("DEBUG: K8sAESKeyManager SecretName:", config.SecretName)
+	println("DEBUG: K8sAESKeyManager SecretNamespace:", config.SecretNamespace)
+	println("DEBUG: K8sAESKeyManager MasterKeyKey:", config.MasterKeyKey)
+
 	// Crear cliente Kubernetes
 	clientset, err := createK8sClient(config)
 	if err != nil {
@@ -50,20 +57,29 @@ func NewK8SAESKeyManager(config K8SConfig) (*K8sAESKeyManager, error) {
 		clientset:    clientset,
 		keyCache:     make(map[string][]byte),
 		cacheMutex:   sync.RWMutex{},
-		currentKeyID: config.MasterKeyKey,
+		currentKeyID: config.KeyID,
 	}
 
 	return manager, nil
 }
 
 func (k *K8sAESKeyManager) GetKey(ctx context.Context, keyID string) (key []byte, err error) {
+	println("DEBUG: GetKey called with keyID:", keyID)
+	println("DEBUG: K8sAESKeyManager config: secretName=", k.config.SecretName,
+		" namespace=", k.config.SecretNamespace,
+		" keyID=", k.config.KeyID,
+		" masterKeyKey=", k.config.MasterKeyKey,
+		" oldMasterKeyKey=", k.config.OldMasterKeyKey)
+
 	k.cacheMutex.RLock()
 	if key, found := k.keyCache[keyID]; found {
 		k.cacheMutex.RUnlock()
+		println("DEBUG: Cache hit for keyID:", keyID)
 		return key, nil
 	}
 	k.cacheMutex.RUnlock()
-
+	println("DEBUG: Cache miss for keyID:", keyID, "cacheSize:", len(k.keyCache))
+	println("DEBUG: Key not found in cache, fetching from K8s Secret:", keyID)
 	// Determinar qué campo del Secret usar
 	secretKeyField := keyID // Por defecto, el keyID es el campo en el Secret
 
@@ -73,6 +89,7 @@ func (k *K8sAESKeyManager) GetKey(ctx context.Context, keyID string) (key []byte
 	} else if keyID == "old-master-key" && k.config.OldMasterKeyKey != "" {
 		secretKeyField = k.config.OldMasterKeyKey
 	}
+	println("DEBUG: Secret field resolved for keyID:", keyID, "->", secretKeyField)
 
 	secret, err := k.clientset.CoreV1().
 		Secrets(k.config.SecretNamespace).
@@ -86,7 +103,7 @@ func (k *K8sAESKeyManager) GetKey(ctx context.Context, keyID string) (key []byte
 
 	keyData, exists := secret.Data[secretKeyField]
 	if !exists {
-		return nil, exceptions.DomainErrK8sSecretNotFound.
+		return nil, exceptions.DomainErrK8sKeyNotFound.
 			WithDetail("secretName", k.config.SecretName).
 			WithDetail("namespace", k.config.SecretNamespace).
 			WithDetail("field", secretKeyField)

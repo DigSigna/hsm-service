@@ -147,8 +147,27 @@ func LoadConfig() *Config {
 	// 	log.Printf("Config file not found, using environment variables and defaults: %v", err)
 	// }
 
-	viper.BindEnv("aeskeymanager.k8s.in_cluster")
-	viper.BindEnv("aeskeymanager.k8s.kubeconfig_path")
+	// Bind explícito para evitar ambigüedad y estandarizar prefijo HSM_
+	_ = viper.BindEnv("aeskeymanager.strategy", "HSM_AESKEYMANAGER_STRATEGY")
+	_ = viper.BindEnv("aeskeymanager.local.master_key", "HSM_AESKEYMANAGER_LOCAL_MASTER_KEY")
+	_ = viper.BindEnv("aeskeymanager.local.key_id", "HSM_AESKEYMANAGER_LOCAL_KEY_ID")
+	_ = viper.BindEnv("aeskeymanager.k8s.in_cluster", "HSM_AESKEYMANAGER_K8S_IN_CLUSTER")
+	_ = viper.BindEnv("aeskeymanager.k8s.kubeconfig_path", "HSM_AESKEYMANAGER_K8S_KUBECONFIG_PATH")
+	_ = viper.BindEnv("aeskeymanager.k8s.secret_name", "HSM_AESKEYMANAGER_K8S_SECRET_NAME")
+	_ = viper.BindEnv("aeskeymanager.k8s.secret_namespace", "HSM_AESKEYMANAGER_K8S_SECRET_NAMESPACE")
+	_ = viper.BindEnv("aeskeymanager.k8s.key_id", "HSM_AESKEYMANAGER_K8S_KEY_ID")
+	_ = viper.BindEnv("aeskeymanager.k8s.master_key_key", "HSM_AESKEYMANAGER_K8S_MASTER_KEY_KEY")
+	_ = viper.BindEnv("aeskeymanager.k8s.old_master_key_key", "HSM_AESKEYMANAGER_K8S_OLD_MASTER_KEY_KEY")
+	_ = viper.BindEnv("aeskeymanager.vault.address", "HSM_AESKEYMANAGER_VAULT_ADDRESS")
+	_ = viper.BindEnv("aeskeymanager.vault.token", "HSM_AESKEYMANAGER_VAULT_TOKEN")
+	_ = viper.BindEnv("aeskeymanager.vault.secret_path", "HSM_AESKEYMANAGER_VAULT_SECRET_PATH")
+	_ = viper.BindEnv("aeskeymanager.vault.path", "HSM_AESKEYMANAGER_VAULT_PATH")
+	_ = viper.BindEnv("aeskeymanager.vault.key_name", "HSM_AESKEYMANAGER_VAULT_KEY_NAME")
+
+	_ = viper.BindEnv("auth.mode", "HSM_AUTH_MODE")
+	_ = viper.BindEnv("auth.public_key_path", "HSM_AUTH_PUBLIC_KEY_PATH")
+	_ = viper.BindEnv("auth.jwks_url", "HSM_AUTH_JWKS_URL")
+	_ = viper.BindEnv("auth.jwks_cache_minutes", "HSM_AUTH_JWKS_CACHE_MINUTES")
 
 	// Valores por defecto
 	setDefaults()

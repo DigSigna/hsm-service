@@ -259,6 +259,7 @@ func createAESKeyManager(cfg *config.Config, audit output.AuditEventDispatcher) 
 		K8S: secrets.K8SConfig{
 			SecretName:      cfg.AESKeyManager.K8S.SecretName,
 			SecretNamespace: cfg.AESKeyManager.K8S.SecretNamespace,
+			KeyID:           cfg.AESKeyManager.K8S.KeyID,
 			MasterKeyKey:    cfg.AESKeyManager.K8S.MasterKeyKey,
 			OldMasterKeyKey: cfg.AESKeyManager.K8S.OldMasterKeyKey,
 			InCluster:       cfg.AESKeyManager.K8S.InCluster,
